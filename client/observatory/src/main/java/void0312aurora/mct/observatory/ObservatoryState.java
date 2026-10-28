@@ -67,18 +67,29 @@ final class ObservatoryState {
       trace.latestKind = kind;
       trace.source = string(event, "source", "unknown");
       if (kind.equals("agent.position_sample") || kind.equals("agent.state_snapshot")) {
-         Vec3 point = point(object(payload, "position"));
+         JsonObject gameplay = object(payload, "gameplay");
+         JsonObject action = object(payload, "action");
+         JsonObject positionObject = payload.has("position") ? payload : gameplay;
+         Vec3 point = point(object(positionObject, "position"));
          if (point != null) {
+            String pointDimension = string(gameplay, "dimension", dimension);
+            boolean discontinuity = booleanValue(payload, "segment_break", false)
+               || (trace.position != null && (!sameDimension(trace.dimension, pointDimension)
+               || trace.position.distanceTo(point) >= 32));
+            if (discontinuity) trace.observedSegment++;
             trace.position = point;
-            trace.dimension = dimension;
+            trace.dimension = pointDimension;
             if (kind.equals("agent.position_sample")) {
-               trace.observed.add(new Sample(dimension, point));
+               trace.observed.add(new Sample(pointDimension, point, trace.observedSegment));
                while (trace.observed.size() > MAX_POINTS) trace.observed.remove(0);
             }
          }
-         trace.health = number(payload, "health", trace.health);
-         trace.hunger = number(payload, "hunger", trace.hunger);
-         if (payload.has("action")) trace.action = string(payload, "action", "idle");
+         trace.health = number(payload, "health", number(gameplay, "health", trace.health));
+         trace.hunger = number(payload, "hunger", number(gameplay, "hunger", trace.hunger));
+         trace.timeOfDay = number(gameplay, "timeOfDay", trace.timeOfDay);
+         trace.worldTick = integer(event, "world_tick", trace.worldTick);
+         if (payload.has("action") && payload.get("action").isJsonPrimitive()) trace.action = string(payload, "action", "idle");
+         else if (action.has("current")) trace.action = string(action, "current", "idle");
       } else if (kind.equals("navigation.goal_set")) {
          if (trace.goal != null && trace.goal.status.equals("travelling")) trace.goal.status = "superseded";
          trace.planned.clear();
@@ -98,7 +109,7 @@ final class ObservatoryState {
             for (JsonElement p : payload.getAsJsonArray("route")) {
                if (!p.isJsonObject()) continue;
                Vec3 point = point(p.getAsJsonObject());
-               if (point != null && trace.planned.size() < MAX_POINTS) trace.planned.add(new Sample(dimension, point));
+               if (point != null && trace.planned.size() < MAX_POINTS) trace.planned.add(new Sample(dimension, point, 0));
             }
          }
          String status = string(payload, "status", "unknown");
@@ -171,6 +182,11 @@ final class ObservatoryState {
       } catch (RuntimeException ignored) { return fallback; }
    }
 
+   static boolean booleanValue(JsonObject o, String key, boolean fallback) {
+      try { return o.has(key) ? o.get(key).getAsBoolean() : fallback; }
+      catch (RuntimeException ignored) { return fallback; }
+   }
+
    static Vec3 point(JsonObject o) {
       double x = number(o, "x", Double.NaN), y = number(o, "y", Double.NaN), z = number(o, "z", Double.NaN);
       return Double.isFinite(x) && Double.isFinite(y) && Double.isFinite(z) ? new Vec3(x, y, z) : null;
@@ -184,7 +200,20 @@ final class ObservatoryState {
       return result;
    }
 
-   record Sample(String dimension, Vec3 point) { }
+   static List<List<Vec3>> observedSegmentsFor(List<Sample> samples, String dimension) {
+      List<List<Vec3>> result = new ArrayList<>();
+      int current = Integer.MIN_VALUE;
+      for (Sample sample : samples) {
+         if (!sameDimension(sample.dimension, dimension)) continue;
+         if (sample.segment != current) { result.add(new ArrayList<>()); current = sample.segment; }
+         result.get(result.size() - 1).add(sample.point);
+      }
+      return result;
+   }
+
+   record Sample(String dimension, Vec3 point, int segment) {
+      Sample(String dimension, Vec3 point) { this(dimension, point, 0); }
+   }
    static final class Goal {
       final String id, dimension, eventId;
       final Vec3 position;
@@ -202,6 +231,9 @@ final class ObservatoryState {
       String actionState = "idle", command = "none", decision = "", decisionSource = "", result = "";
       Vec3 position;
       double health = Double.NaN, hunger = Double.NaN;
+      double timeOfDay = Double.NaN;
+      int worldTick;
+      int observedSegment;
       Goal goal;
       Trace(String agent) {
          this.agent = agent;

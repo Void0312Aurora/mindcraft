@@ -21,8 +21,14 @@ public final class ObservatoryStateSmoke {
       check(s.selected().goal.status.equals("travelling"), "late completion of old goal must not complete new goal");
       s.apply(snapshot("new", 6, "{sequence:6,agent_id:'MCT_A',kind:'navigation.goal_reached',goal_id:'g2',payload:{}}"));
       check(s.selected().goal.status.equals("arrived"), "matching goal completes");
-      s.apply(snapshot("new", 6, "{sequence:6,agent_id:'MCT_A',kind:'navigation.goal_reached',goal_id:'g2',payload:{}}"));
-      check(s.events.size() == 6, "repeated delta must not duplicate event history");
+      s.apply(snapshot("new", 7, "{sequence:7,agent_id:'MCT_A',kind:'agent.state_snapshot',world_tick:12345,payload:{gameplay:{position:{x:12,y:65,z:22},dimension:'minecraft:overworld',health:17,hunger:9,timeOfDay:13000},action:{current:'Thinking',kind:'thinking'}}}"));
+      check(s.selected().health == 17 && s.selected().hunger == 9 && s.selected().action.equals("Thinking"), "nested full state must update HUD fields: health=" + s.selected().health + ", hunger=" + s.selected().hunger + ", action=" + s.selected().action);
+      check(s.selected().worldTick == 12345 && s.selected().timeOfDay == 13000, "world tick and time of day stay distinct");
+      s.apply(snapshot("new", 8, "{sequence:8,agent_id:'MCT_A',kind:'agent.position_sample',payload:{position:{x:12,y:65,z:22}}}"));
+      s.apply(snapshot("new", 9, "{sequence:9,agent_id:'MCT_A',kind:'agent.position_sample',payload:{position:{x:60,y:80,z:22},segment_break:true}}"));
+      check(ObservatoryState.observedSegmentsFor(s.selected().observed, "overworld").size() == 2, "teleport or discontinuity must split observed trail");
+      s.apply(snapshot("new", 9, "{sequence:9,agent_id:'MCT_A',kind:'navigation.goal_reached',goal_id:'g2',payload:{}}"));
+      check(s.events.size() == 9, "repeated delta must not duplicate event history");
       System.out.println("Observatory state smoke: PASS (run reset, isolation, interruption, goal correlation, deduplication)");
    }
    private static JsonObject snapshot(String run, int sequence, String event) {

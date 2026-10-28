@@ -90,6 +90,12 @@ node tools/mct-mvp/start-agents.mjs
 
 当前上游仍有单一交谈对象限制；本轮环境准备没有实现 issue #1 的多人调度改造。`language=en` 用于关闭额外的 Google 翻译调用；任务提示要求角色用中文交流。
 
+## 当前运行配置与验收边界
+
+运行配置集中在 `config/mct-mvp/runtime.json`。默认 `observatory` 指向普通 1.20.1 世界（25586 / MindServer 8080），`journey` 单独保留生存旅行环境（25585 / MindServer 8086）；脚本和观察端通过 `MCT_RUNTIME_PROFILE` 选择，不再在多个脚本中分别写死端口。`node tools/mct-mvp/runtime-config-smoke.mjs` 会检查两个 profile 及环境变量覆盖。
+
+当前已通过的是普通世界中的单脚本 Agent 观察链：真实 Mineflayer / Pathfinder 完成抵达、中断和改令，且轨迹、决策和动作事件可在 Observatory 中读取。它不等同于真实 LLM 旅行；仓库没有 `config/mct-mvp/model.local.json`，因此没有启动模型或产生付费调用。过夜、饥饿、三 Agent 协作和整体暂停仍未验收。
+
 ## 已有环境范围
 
 专用服务端位于 `run/tellus-mvp-1.20.1`，观察客户端为 `fabric-mindcraft-mvp-1.20.1`。服务器仅绑定本机 `127.0.0.1:25585`，MindServer 预留 `8086`，观察客户端控制端口为 `25582`。

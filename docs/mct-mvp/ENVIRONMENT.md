@@ -35,3 +35,9 @@
 可检查的本地证据：`run/evidence/smoke.json`、`run/evidence/dependencies.json`、`run/evidence/infrastructure.json`、`.mct/screenshots/environment-ready.png` 和服务端日志。本轮启动的服务端与观察客户端均已关闭，专用端口已释放；存档、实例与依赖保留。原有 `25566` 服务仍在运行。
 
 这些结果只证明环境接通。尚未运行付费模型，没有开展跨夜旅行、饥饿、生存或协作评估；未验收寻路、合成、多人调度、地形资源分布或 cube-net 接缝。A/B、模型、费用上限和床规则仍待确定。
+
+## 2026-10-28 复核补充
+
+本次集成复核使用 `config/mct-mvp/runtime.json` 的 `observatory` profile：普通 1.20.1 服务端 `ordinary-mvp-1.20.1`（25586）、Fabric 观察客户端 `fabric-mindcraft-mvp-1.20.1`、MindServer 8080。脚本 Agent 实际入服并完成抵达、中断、改令三阶段；运行结束后客户端、服务端和脚本 MindServer 已停止，世界与运行证据保留。`journey` profile 仍单独指向 25585/8086，不参与本次 Observatory 复核。
+
+本机缺少 `config/mct-mvp/model.local.json`，也没有为本轮读取或复制旧工程密钥；真实 LLM、embedding、三人旅行和费用验证因此保持未执行。

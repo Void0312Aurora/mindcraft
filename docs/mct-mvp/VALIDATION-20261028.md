@@ -53,3 +53,14 @@
 本轮只验证观测链，短路线主动设为白天。脚本阶段等待 Enter 时世界仍运行；打开检查器也不暂停。未验收完整可恢复暂停、三 Agent 消息协作、LLM 决策、过夜与饥饿生存，也没有历史回放。以上内容留待后续阶段。
 
 测试结束后关闭本轮脚本、记录服务、观察客户端和普通测试服务器，保留世界与证据。
+
+## 集成修复后的补充复验
+
+在同一普通 1.20.1 服务端上重新执行单 Agent 脚本验收：`integration-recheck-20261028-03`。这次使用 `observatory` runtime profile、自动推进检查点，避免交互终端输入影响结果；仍然是脚本 Agent，LLM 调用数为 0。
+
+- 运行结果仍为 `arrived → interrupted → arrived`，实际事件 43 条，其中位置采样 20 条。
+- `events.jsonl` 中包含 3 次 `decision.requested`、3 次 `action.started`、1 次 `action.interrupted`、2 次 `navigation.goal_reached`；`scenario-summary.json` 保存三阶段结果。
+- 观察端状态采集现在有单请求超时边界，嵌套 `gameplay` 快照会保留 `worldTick` 与动作；跨维度、死亡或超过 32 方块的实际轨迹会断段，渲染端不会用直线连接断点。
+- `client wait-ready` 在本次环境中仍曾超时，但服务端日志确认观察者随后入服，位置查询成功；因此只把入服和位置查询作为真实运行证据，不把 wait-ready 超时当作观察端通过或失败。
+
+本次补充证据：`run/evidence/integration-recheck-20261028-03/events.jsonl`、`run/evidence/integration-recheck-20261028-03/scenario-summary.json`。测试完成后客户端、服务端和脚本 MindServer 均已停止。

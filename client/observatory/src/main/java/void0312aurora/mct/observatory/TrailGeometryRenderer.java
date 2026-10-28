@@ -65,17 +65,21 @@ final class TrailGeometryRenderer {
 
    private static void drawObserved(ObservatoryState.Trace trace, String dimension,
                                     Vec3 camera, Matrix4f pose) {
-      List<Vec3> points = ObservatoryState.pointsFor(trace.observed, dimension);
-      if (points.size() < 2) return;
-
+      List<List<Vec3>> segments = ObservatoryState.observedSegmentsFor(trace.observed, dimension);
+      if (segments.stream().noneMatch(points -> points.size() >= 2)) {
+         drawObservedMarkers(ObservatoryState.pointsFor(trace.observed, dimension), trace.color, camera, pose);
+         return;
+      }
       BufferBuilder buffer = Tesselator.getInstance().getBuilder();
       buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
-      for (int i = 0; i + 1 < points.size(); i++) {
-         drawRibbon(buffer, pose, camera, lifted(points.get(i)), lifted(points.get(i + 1)),
-            trace.color, 0.98F, OBSERVED_LINE_WIDTH);
+      for (List<Vec3> points : segments) {
+         for (int i = 0; i + 1 < points.size(); i++) {
+            drawRibbon(buffer, pose, camera, lifted(points.get(i)), lifted(points.get(i + 1)),
+               trace.color, 0.98F, OBSERVED_LINE_WIDTH);
+         }
       }
       BufferUploader.drawWithShader(buffer.end());
-      drawObservedMarkers(points, trace.color, camera, pose);
+      drawObservedMarkers(ObservatoryState.pointsFor(trace.observed, dimension), trace.color, camera, pose);
    }
 
    private static void drawPlanned(ObservatoryState.Trace trace, String dimension,

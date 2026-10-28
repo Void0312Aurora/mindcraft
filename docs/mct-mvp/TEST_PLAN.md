@@ -92,3 +92,28 @@ MCT_A、MCT_B、MCT_C 从 A 出发前往 B，全员存活抵达。途中至少�
 Mindcraft 默认加载 `mineflayer-auto-eat`，并有自保、战斗、狩猎等自动模式。自动吃掉背包里的面包证明执行机制有效，不能单独证明 LLM 主动发现饥饿。复盘时分开记录自动执行与角色主动决定的获取、储备、分享和路线调整。
 
 当前不承诺专门的长期记忆、稳定多人对话、全天直播或自然分工已经具备。第一轮要回答的是：三人能否在实际旅行和生存需求中持续推进共同目标，以及最先阻碍它的因素是什么。
+
+### 0c. 第一阶段集成回归
+
+先运行不需要模型的检查：
+
+```powershell
+npm run mct:runtime-config-smoke
+npm run mct:telemetry-smoke
+npm run mct:agent-telemetry-smoke
+npm run mct:telemetry-bridge-smoke
+npm run mct:state-collection-smoke
+npm run mct:telemetry-performance-smoke
+& 'D:\workshop\Game\Tellus-Optimized-rfc\gradlew.bat' -p client/observatory build stateSmoke --no-daemon --offline -I D:/workshop/_tmp/owo-local.init.gradle
+```
+
+`state-collection-smoke` 验证单个 Agent 回调超时不会拖住采集，并验证恢复后保留嵌套完整状态。`stateSmoke` 验证嵌套快照、世界 tick 与日内时间区分、Y/跳变轨迹断段和旧目标隔离。性能 smoke 只给同步 JSONL 的合成基线，不能替代真实服务器运行。
+
+需要真实 MC 的检查单独运行：
+
+```powershell
+$env:MCT_RUNTIME_PROFILE = 'observatory'
+npm run mct:single-agent-observer-check
+```
+
+需要自动化推进检查点时可设置 `$env:MCT_AUTO_CONTINUE = '1'`；默认不设置时仍可逐个 Enter 观察。它验证普通世界、单个脚本 Agent、观察客户端和运行隔离；不验证 LLM、过夜、饥饿或完整暂停。真实 Mindcraft Agent 仍需已授权的模型和 embedding 配置，当前缺少 `config/mct-mvp/model.local.json`，因此不能宣称真实 LLM 闭环已通过。
