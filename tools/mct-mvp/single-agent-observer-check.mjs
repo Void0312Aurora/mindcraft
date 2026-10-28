@@ -5,6 +5,7 @@ import { once } from 'node:events';
 import { createInterface } from 'node:readline/promises';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { runtimeEnvironment } from './runtime-config.mjs';
 import { RconClient } from './rcon-client.mjs';
 import { AgentTelemetry } from '../../src/observability/agent_telemetry.js';
 import { serverProxy } from '../../src/agent/mindserver_proxy.js';
@@ -15,10 +16,11 @@ process.env.MCT_TELEMETRY = '1';
 process.env.MCT_TELEMETRY_TEXT = '1';
 process.env.MCT_RUN_ID ||= `single-observer-${new Date().toISOString().replace(/[:.]/g, '-')}`;
 const { createMindServer, getTelemetryStore } = await import('../../src/mindcraft/mindserver.js');
-const server = createMindServer(false, 8080);
+const runtime = runtimeEnvironment();
+const server = createMindServer(false, runtime.mindserver.port);
 await once(server, 'listening');
 const rl = createInterface({ input: process.stdin, output: process.stdout });
-const socket = io('http://127.0.0.1:8080', { reconnection: false });
+const socket = io(runtime.mindserver.url, { reconnection: false });
 await once(socket, 'connect');
 serverProxy.socket = socket;
 serverProxy.connected = true;
@@ -29,7 +31,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const checkpoint = async stage => {
     console.log(JSON.stringify({ checkpoint: stage, run_id: getTelemetryStore().runId,
         sequence: getTelemetryStore().sequence, agent: bot?.username || null }));
-    await rl.question('Press Enter to continue (observer only; world keeps running): ');
+    if (process.env.MCT_AUTO_CONTINUE !== '1') {
+        await rl.question('Press Enter to continue (observer only; world keeps running): ');
+    }
 };
 
 function instruction(text, command) {
@@ -84,10 +88,11 @@ try {
     if (process.argv.includes('--empty')) {
         await checkpoint('empty-run');
     } else {
-        bot = createBot({ username: 'MCT_A', host: '127.0.0.1', port: 25586, version: '1.20.1', auth: 'offline' });
+        bot = createBot({ username: 'MCT_A', host: runtime.minecraft.host, port: runtime.minecraft.port,
+            version: runtime.minecraft.version, auth: 'offline' });
         bot.loadPlugin(pathfinder);
         await once(bot, 'spawn');
-        const properties = readFileSync('run/ordinary-mvp-1.20.1/server.properties', 'utf8');
+        const properties = readFileSync(resolve('run', runtime.minecraft.server, 'server.properties'), 'utf8');
         const password = properties.match(/^\s*rcon.password=(.*)$/m)?.[1]?.trim();
         if (!password) throw new Error('Local test server RCON password unavailable');
         rcon = new RconClient({ password }); await rcon.connect();

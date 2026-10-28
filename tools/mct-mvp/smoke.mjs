@@ -2,8 +2,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { setSettings } from '../../src/agent/settings.js';
 import { initBot } from '../../src/utils/mcdata.js';
+import { runtimeEnvironment } from './runtime-config.mjs';
 
-setSettings({ host: '127.0.0.1', port: 25585, auth: 'offline', minecraft_version: '1.20.1' });
+const runtime = runtimeEnvironment(process.env.MCT_SMOKE_RUNTIME_PROFILE || 'journey');
+setSettings({ host: runtime.minecraft.host, port: runtime.minecraft.port, auth: 'offline', minecraft_version: runtime.minecraft.version });
+const expectedGameMode = process.env.MCT_EXPECTED_GAMEMODE || (runtime.name === 'journey' ? 'survival' : null);
 const names = ['MCT_Probe_A', 'MCT_Probe_B', 'MCT_Probe_C'];
 const bots = [];
 const results = [];
@@ -24,7 +27,8 @@ try {
     }
     for (const bot of bots) {
         if (bot.health === undefined || bot.food === undefined) throw new Error(`${bot.username}: health/food not received`);
-        if (bot.game.gameMode !== 'survival') throw new Error(`${bot.username}: expected survival, got ${bot.game.gameMode}`);
+        if (expectedGameMode && bot.game.gameMode !== expectedGameMode)
+            throw new Error(`${bot.username}: expected ${expectedGameMode}, got ${bot.game.gameMode}`);
         results.push({ name: bot.username, version: bot.version, mode: bot.game.gameMode, health: bot.health, food: bot.food, saturation: bot.foodSaturation, position: bot.entity.position, visiblePlayers: Object.keys(bot.players) });
     }
     mkdirSync('run/evidence', { recursive: true });

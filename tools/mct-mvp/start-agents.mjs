@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { runtimeEnvironment } from './runtime-config.mjs';
 
 process.chdir(fileURLToPath(new URL('../../', import.meta.url)));
 const read = path => JSON.parse(readFileSync(path, 'utf8'));
@@ -10,12 +11,17 @@ const model = read(modelPath);
 if (!model.model?.model || /REPLACE|CHOSEN/.test(model.model.model)) throw new Error('Choose a real model first.');
 if (!model.embedding?.model || /REPLACE|CHOSEN/.test(model.embedding.model)) throw new Error('Configure the embedding model and its provider explicitly; Mindcraft initializes skill embeddings on startup.');
 const scenario = read('config/mct-mvp/scenario.json');
+const runtime = runtimeEnvironment(process.env.MCT_RUNTIME_PROFILE || 'journey');
 if (!scenario.route.start || !scenario.route.destination) throw new Error('Survey and set A/B before starting the journey.');
 if (!['allow-sleep', 'full-night'].includes(scenario.sleepPolicy)) throw new Error('Choose sleepPolicy: allow-sleep or full-night.');
 for (const point of [scenario.route.start, scenario.route.destination]) {
     if (![point.x, point.y, point.z].every(Number.isFinite)) throw new Error('A/B must have numeric x/y/z coordinates.');
 }
 const settings = read('config/mct-mvp/agents.settings.json');
+settings.host = runtime.minecraft.host;
+settings.port = runtime.minecraft.port;
+settings.minecraft_version = runtime.minecraft.version;
+settings.mindserver_port = runtime.mindserver.port;
 mkdirSync('run/agent-profiles', { recursive: true });
 settings.profiles = scenario.agents.map(name => {
     const path = `run/agent-profiles/${name}.json`;

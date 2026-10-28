@@ -1,9 +1,14 @@
 param(
-    [string]$RuntimeSource = 'D:\workshop\Game\mc-pilot-deployment\run\tellus-boundary-20261025'
+    [string]$RuntimeSource = $env:MCT_RUNTIME_SOURCE
 )
 $ErrorActionPreference = 'Stop'
 $projectDir = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$serverDir = Join-Path $projectDir 'run\ordinary-mvp-1.20.1'
+$runtime = Get-Content -Raw (Join-Path $projectDir 'config\mct-mvp\runtime.json') | ConvertFrom-Json
+$profile = $runtime.environments.observatory
+$serverDir = Join-Path $projectDir ('run\' + $profile.minecraft.server)
+if ([string]::IsNullOrWhiteSpace($RuntimeSource)) {
+    throw 'Set MCT_RUNTIME_SOURCE to a generic Fabric 1.20.1 server runtime. The old Tellus runtime path is intentionally not used by this script.'
+}
 if (Test-Path -LiteralPath $serverDir) { throw 'The ordinary demo server directory already exists; inspect it before preparing again.' }
 foreach ($p in @((Join-Path $RuntimeSource 'server.jar'), (Join-Path $RuntimeSource 'libraries'), (Join-Path $RuntimeSource 'versions'), (Join-Path $RuntimeSource '.fabric\server'))) {
     if (!(Test-Path -LiteralPath $p)) { throw "Missing runtime input: $p" }
@@ -13,14 +18,14 @@ Copy-Item -LiteralPath (Join-Path $RuntimeSource 'server.jar') -Destination $ser
 Copy-Item -LiteralPath (Join-Path $RuntimeSource 'libraries'), (Join-Path $RuntimeSource 'versions') -Destination $serverDir -Recurse
 New-Item -ItemType Directory -Path (Join-Path $serverDir '.fabric') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $RuntimeSource '.fabric\server') -Destination (Join-Path $serverDir '.fabric') -Recurse
-@'
+@"
 server-ip=127.0.0.1
-server-port=25586
+server-port=$($profile.minecraft.port)
 online-mode=false
 enforce-secure-profile=false
 enable-rcon=true
-rcon.port=25575
- rcon.password=mct-observability
+rcon.port=$($profile.minecraft.rcon_port)
+rcon.password=mct-observability
 enable-query=false
 gamemode=creative
 force-gamemode=true
@@ -40,5 +45,5 @@ level-seed=mct-observability-20261028
 level-type=minecraft:normal
 generate-structures=true
 motd=MCT in-game observability demo
-'@ | Set-Content -LiteralPath (Join-Path $serverDir 'server.properties') -Encoding ascii
+"@ | Set-Content -LiteralPath (Join-Path $serverDir 'server.properties') -Encoding ascii
 Write-Output "Prepared ordinary Minecraft server at $serverDir. No Tellus jar or mod was copied."

@@ -1,0 +1,36 @@
+{
+  "schema_version": "mct-mvp/runtime/v1",
+  "default_environment": "observatory",
+  "environments": {
+    "observatory": {
+      "purpose": "普通 Minecraft 创意测试世界、脚本 Agent 和 Fabric Observatory",
+      "minecraft": {
+        "host": "127.0.0.1",
+        "port": 25586,
+        "version": "1.20.1",
+        "server": "ordinary-mvp-1.20.1",
+        "client": "fabric-mindcraft-mvp-1.20.1",
+        "rcon_port": 25575
+      },
+      "mindserver": {
+        "host": "127.0.0.1",
+        "port": 8080
+      }
+    },
+    "journey": {
+      "purpose": "独立的 Survival/Journey 环境；不作为 Observatory 默认环境",
+      "minecraft": {
+        "host": "127.0.0.1",
+        "port": 25585,
+        "version": "1.20.1",
+        "server": "tellus-mvp-1.20.1",
+        "client": "fabric-mindcraft-mvp-1.20.1",
+        "rcon_port": 25575
+      },
+      "mindserver": {
+        "host": "127.0.0.1",
+        "port": 8086
+      }
+    }
+  }
+}
