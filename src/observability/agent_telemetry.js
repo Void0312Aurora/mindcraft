@@ -41,6 +41,7 @@ export class AgentTelemetry {
         this.lastPathSignature = null;
         this.sampleTimer = null;
         this.lastSample = null;
+        this.pendingSegmentBreak = false;
         this.attached = false;
     }
 
@@ -125,7 +126,10 @@ export class AgentTelemetry {
                 source: 'minecraft', origin: 'minecraft'
             }));
         }
-        bot.on('death', () => this.emit('world.death', {}, { source: 'minecraft', origin: 'minecraft' }));
+        bot.on('death', () => {
+            this.pendingSegmentBreak = true;
+            this.emit('world.death', {}, { source: 'minecraft', origin: 'minecraft' });
+        });
         bot.on('autoeat_started', food => this.emit('world.food_started', {
             item: food?.name || null
         }, { source: 'mineflayer-auto-eat', origin: 'controller' }));
@@ -153,14 +157,19 @@ export class AgentTelemetry {
         const position = positionOf(bot?.entity?.position);
         if (!position) return;
         const previous = this.lastSample;
-        const moved = !previous || Math.hypot(position.x - previous.x, position.z - previous.z) >= 1;
+        const dimension = bot?.game?.dimension || null;
+        const distance = previous ? Math.hypot(position.x - previous.x, position.y - previous.y, position.z - previous.z) : 0;
+        const segmentBreak = !!previous && (this.pendingSegmentBreak || previous.dimension !== dimension || distance >= 32);
+        const moved = !previous || Math.hypot(position.x - previous.x, position.y - previous.y, position.z - previous.z) >= 1;
         if (!moved && previous?.health === bot.health && previous?.hunger === bot.food) return;
-        this.lastSample = { ...position, health: bot.health, hunger: bot.food };
+        this.lastSample = { ...position, health: bot.health, hunger: bot.food, dimension };
+        this.pendingSegmentBreak = false;
         this.emit('agent.position_sample', {
             position,
             health: Number.isFinite(bot.health) ? Math.round(bot.health) : null,
             hunger: Number.isFinite(bot.food) ? Math.round(bot.food) : null,
-            action: this.agent.actions?.currentActionLabel || null
+            action: this.agent.actions?.currentActionLabel || null,
+            segment_break: segmentBreak
         }, { source: 'minecraft', origin: 'minecraft' });
     }
 

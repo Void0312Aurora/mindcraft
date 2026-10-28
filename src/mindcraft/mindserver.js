@@ -37,6 +37,7 @@ class AgentConnection {
 export function registerAgent(settings, viewer_port) {
     let agentConnection = new AgentConnection(settings, viewer_port);
     agent_connections[settings.profile.name] = agentConnection;
+    return agentConnection;
 }
 
 export function logoutAgent(agentName) {
@@ -333,22 +334,63 @@ function agentsStatusUpdate(socket) {
 let listenerInterval = null;
 let telemetryInterval = null;
 let telemetryPollActive = false;
+let stateCollectionPromise = null;
+const stateRequestTimeoutMs = Math.max(100, Number.parseInt(process.env.MCT_STATE_REQUEST_TIMEOUT_MS || '800', 10));
+const stateRequestErrors = new Map();
+
+function requestAgentState(agentName, agent) {
+    return new Promise(resolve => {
+        let settled = false;
+        const finish = result => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(result);
+        };
+        const timer = setTimeout(() => finish({ error: 'timeout' }), stateRequestTimeoutMs);
+        if (!agent.socket || agent.socket.disconnected) {
+            finish({ error: 'disconnected' });
+            return;
+        }
+        try {
+            agent.socket.emit('get-full-state', state => {
+                finish(state ? { state } : { error: 'empty_response' });
+            });
+        } catch (error) {
+            finish({ error: 'request_error', message: String(error?.message || error) });
+        }
+    });
+}
 
 async function collectAgentStates() {
+    if (stateCollectionPromise) return stateCollectionPromise;
+    stateCollectionPromise = (async () => {
     const states = {};
-    for (let agentName in agent_connections) {
-        let agent = agent_connections[agentName];
-        if (agent.in_game) {
-            try {
-                states[agentName] = await new Promise((resolve) => {
-                    agent.socket.emit('get-full-state', (s) => resolve(s));
+    const pending = Object.entries(agent_connections)
+        .filter(([, agent]) => agent.in_game)
+        .map(async ([agentName, agent]) => [agentName, await requestAgentState(agentName, agent)]);
+    for (const [agentName, result] of await Promise.all(pending)) {
+        if (result.state) {
+            states[agentName] = result.state;
+            stateRequestErrors.delete(agentName);
+        } else {
+            states[agentName] = { error: result.error };
+            if (stateRequestErrors.get(agentName) !== result.error) {
+                stateRequestErrors.set(agentName, result.error);
+                telemetryStore?.record({
+                    kind: `agent.state_request_${result.error}`,
+                    source: 'mindserver',
+                    agent_id: agentName,
+                    entity_id: agentName,
+                    origin: 'mindserver',
+                    payload: { timeout_ms: stateRequestTimeoutMs, error: result.message || result.error }
                 });
-            } catch (e) {
-                states[agentName] = { error: String(e) };
             }
         }
     }
     return states;
+    })().finally(() => { stateCollectionPromise = null; });
+    return stateCollectionPromise;
 }
 
 function startTelemetryPolling() {
@@ -367,7 +409,7 @@ function startTelemetryPolling() {
                     agent_id: agentName,
                     entity_id: agentName,
                     dimension: gameplay.dimension || null,
-                    world_tick: gameplay.timeOfDay ?? null,
+                    world_tick: gameplay.worldTick ?? null,
                     origin: 'minecraft',
                     payload: state
                 });
@@ -404,3 +446,4 @@ export const getIO = () => io;
 export const getServer = () => server;
 export const numStateListeners = () => agent_listeners.length;
 export const getTelemetryStore = () => telemetryStore;
+export const collectAgentStatesForTest = collectAgentStates;

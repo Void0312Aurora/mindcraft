@@ -116,3 +116,13 @@ npm run mct:telemetry-bridge-smoke
 运行隔离、单角色状态/目标、owo-ui 检查器和 arrive / interrupt / redirect 场景已实测。详见 [验证记录](VALIDATION-20261028.md)。复用运行标签会自动添加唯一后缀，保留旧 JSONL。
 
 决定事件上的 goal_id 表示触发当时的目标上下文；新指令的目标由后续 navigation.goal_set 事件给出。两者不能混作同一个时间点。
+
+## 2026-10-28 集成复核补充
+
+普通测试环境和 Journey Survival 环境由 `config/mct-mvp/runtime.json` 分开描述：默认 `observatory` 使用普通世界 `25586` / MindServer `8080`，`journey` 使用独立的 `25585` / `8086`。脚本可通过 `MCT_RUNTIME_PROFILE` 以及端口环境变量覆盖；不会从旧 Tellus 路径隐式切换普通环境。`prepare-ordinary.ps1` 现在要求显式提供通用 Fabric 运行时目录。
+
+MindServer 状态轮询对每个 Agent 使用有界等待，并复用同一轮采集 Promise，避免失联 Agent 阻塞其他 Agent 或形成请求堆积。超时、断线和空响应以 `agent.state_request_timeout`、`agent.state_request_disconnected`、`agent.state_request_empty_response` 记录；恢复后状态快照继续保留原始嵌套结构。
+
+`agent.state_snapshot` 的 `payload` 使用 `gameplay` 和 `action` 原始层级；客户端从嵌套字段读取生命、饥饿、位置和动作。`gameplay.worldTick` 写入事件顶层 `world_tick`，`gameplay.timeOfDay` 仍是游戏日内时间，不能互换。实际位置采样包含 `segment_break`，客户端遇到 Y 方向、维度、死亡重生或大跳变时分段，绝不把断裂段渲染成连续意图。
+
+当前同步 JSONL 追加仍保留：`telemetry-performance-smoke` 对 1 和 3 个逻辑 Agent 做的是合成写入上界测量，不等同于真实长时间服务器稳定性。若真实实验中事件频率或磁盘延迟超过该边界，再改为有界异步写入。

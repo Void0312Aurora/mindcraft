@@ -66,6 +66,7 @@ export function getFullState(agent) {
             gamemode: bot.game.gameMode,
             health: Math.round(bot.health),
             hunger: Math.round(bot.food),
+            worldTick: Number.isFinite(bot.time.age) ? bot.time.age : null,
             biome: getBiomeName(bot),
             weather,
             timeOfDay: bot.time.timeOfDay,
