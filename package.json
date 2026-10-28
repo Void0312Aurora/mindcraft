@@ -18,7 +18,7 @@
         "groq-sdk": "^0.15.0",
         "minecraft-data": "^3.97.0",
         "minecraft-assets": "^1.16.0",
-        "mineflayer": "^4.33.0",
+        "mineflayer": "4.33.0",
         "mineflayer-armor-manager": "^2.0.1",
         "mineflayer-auto-eat": "^3.3.6",
         "mineflayer-collectblock": "^1.4.1",
@@ -43,6 +43,13 @@
     },
     "scripts": {
         "postinstall": "patch-package",
+        "mct:observability-demo": "node tools/mct-mvp/observability-demo.mjs",
+        "mct:ingame-observability-demo": "node tools/mct-mvp/ingame-script-demo.mjs",
+        "mct:telemetry-smoke": "node tools/mct-mvp/telemetry-contract-smoke.mjs",
+        "mct:agent-telemetry-smoke": "node tools/mct-mvp/agent-telemetry-smoke.mjs",
+        "mct:telemetry-bridge-smoke": "node tools/mct-mvp/telemetry-bridge-smoke.mjs",
+        "mct:real-pathfinder-agent": "node tools/mct-mvp/real-pathfinder-agent.mjs",
+        "mct:single-agent-observer-check": "node tools/mct-mvp/single-agent-observer-check.mjs",
         "start": "node main.js",
         "reinstall": "npm run clean:modules && npm install",
         "clean:modules": "node -e \"const fs=require('fs');const p=require('path');['node_modules','package-lock.json'].forEach(f=>{if(fs.existsSync(f)){if(fs.lstatSync(f).isDirectory()){fs.rmSync(f,{recursive:true,force:true});}else{fs.unlinkSync(f);}}});\""

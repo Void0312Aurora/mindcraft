@@ -60,6 +60,7 @@ export class ActionManager {
 
     async _executeAction(actionLabel, actionFn, timeout = 10) {
         let TIMEOUT;
+        let telemetryActionId = null;
         try {
             if (this.last_action_time > 0) {
                 let time_diff = Date.now() - this.last_action_time;
@@ -95,6 +96,7 @@ export class ActionManager {
             this.executing = true;
             this.currentActionLabel = actionLabel;
             this.currentActionFn = actionFn;
+            telemetryActionId = this.agent.telemetry?.actionStarted(actionLabel, this.agent._currentDecisionId) || null;
 
             // timeout in minutes
             if (timeout > 0) {
@@ -122,7 +124,10 @@ export class ActionManager {
             }
 
             // return action status report
-            return { success: true, message: output, interrupted, timedout };
+            const result = { success: true, message: output, interrupted, timedout };
+            this.agent.telemetry?.actionCompleted(telemetryActionId, result);
+            this.agent._currentDecisionId = null;
+            return result;
         } catch (err) {
             this.executing = false;
             this.currentActionLabel = '';
@@ -145,6 +150,8 @@ export class ActionManager {
             if (!interrupted) {
                 this.agent.bot.emit('idle');
             }
+            this.agent.telemetry?.actionFailed(telemetryActionId, err);
+            this.agent._currentDecisionId = null;
             return { success: false, message, interrupted, timedout: false };
         }
     }

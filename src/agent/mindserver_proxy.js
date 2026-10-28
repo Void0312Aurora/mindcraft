@@ -134,3 +134,10 @@ export function sendBotChatToServer(agentName, json) {
 export function sendOutputToServer(agentName, message) {
     serverProxy.getSocket().emit('bot-output', agentName, message);
 }
+
+// Passive observability event transport. The server may discard these events
+// when telemetry is disabled; agent behavior never waits for an acknowledgement.
+export function sendTelemetry(event) {
+    if (!serverProxy.connected || !serverProxy.getSocket()) return;
+    serverProxy.getSocket().emit('telemetry-event', event);
+}

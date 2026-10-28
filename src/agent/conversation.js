@@ -155,10 +155,12 @@ class ConversationManager {
         convo.active = true;
         
         const end = message.includes('!endConversation');
+        const telemetry_id = agent.telemetry?.messageSent(send_to, message) || null;
         const json = {
             'message': message,
             start,
             end,
+            telemetry_id,
         };
 
         this.awaiting_response = true;
@@ -166,6 +168,7 @@ class ConversationManager {
     }
 
     async receiveFromBot(sender, received) {
+        agent.telemetry?.messageDelivered(sender, received);
         const convo = this._getConvo(sender);
 
         if (convo.ignore_until_start && !received.start)

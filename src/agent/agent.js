@@ -17,6 +17,7 @@ import settings from './settings.js';
 import { Task } from './tasks/tasks.js';
 import { speak } from './speak.js';
 import { log, validateNameFormat, handleDisconnection } from './connection_handler.js';
+import { AgentTelemetry } from '../observability/agent_telemetry.js';
 
 export class Agent {
     async start(load_mem=false, init_message=null, count_id=0) {
@@ -64,6 +65,8 @@ export class Agent {
 
         console.log(this.name, 'logging into minecraft...');
         this.bot = initBot(this.name);
+        this.telemetry = new AgentTelemetry(this);
+        this.telemetry.attach();
         
         // Connection Handler
         const onDisconnect = (event, reason) => {
@@ -317,16 +320,26 @@ export class Agent {
         for (let i=0; i<max_responses; i++) {
             if (checkInterrupt()) break;
             let history = this.history.getHistory();
+            const decisionId = this.telemetry?.decisionRequested(source, message, {
+                self_prompt,
+                from_other_bot
+            });
             let res = await this.prompter.promptConvo(history);
 
             console.log(`${this.name} full response to ${source}: ""${res}""`);
 
             if (res.trim().length === 0) {
+                if (decisionId) this.telemetry?.decisionCompleted(decisionId, res, null);
                 console.warn('no response')
                 break; // empty response ends loop
             }
 
             let command_name = containsCommand(res);
+
+            if (decisionId) {
+                this.telemetry?.decisionCompleted(decisionId, res, command_name || null);
+                this._currentDecisionId = decisionId;
+            }
 
             if (command_name) { // contains query or command
                 res = truncCommandMessage(res); // everything after the command is ignored
@@ -360,6 +373,9 @@ export class Agent {
                 }
 
                 let execute_res = await executeCommand(this, res);
+                // The decision-to-action link is only valid for this command;
+                // avoid attaching a later action to an unrelated decision.
+                this._currentDecisionId = null;
 
                 console.log('Agent executed:', command_name, 'and got:', execute_res);
                 used_command = true;
@@ -372,6 +388,7 @@ export class Agent {
             else { // conversation response
                 this.history.add(this.name, res);
                 this.routeResponse(source, res);
+                this._currentDecisionId = null;
                 break;
             }
             

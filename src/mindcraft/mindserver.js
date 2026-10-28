@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import * as mindcraft from './mindcraft.js';
 import { readFileSync } from 'fs';
+import { TelemetryStore } from './telemetry_store.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Mindserver is:
@@ -14,6 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let io;
 let server;
+let telemetryStore;
 const agent_connections = {};
 const agent_listeners = [];
 
@@ -49,6 +51,17 @@ export function createMindServer(host_public = false, port = 8080) {
     const app = express();
     server = http.createServer(app);
     io = new Server(server);
+    telemetryStore = new TelemetryStore({ enabled: globalThis.process?.env?.MCT_TELEMETRY === '1' });
+
+    // Small polling bridge for a future Fabric observer. It exposes only the
+    // redacted, bounded telemetry buffer; agent behavior does not depend on a
+    // client consuming it.
+    app.get('/mct/observability/snapshot', (req, res) => {
+        if (!telemetryStore?.enabled) return res.status(404).json({ error: 'telemetry_disabled' });
+        const after = Number.parseInt(req.query.after || '0', 10);
+        res.json(telemetryStore.snapshot(Number.isFinite(after) ? after : 0,
+            typeof req.query.run_id === 'string' ? req.query.run_id : null));
+    });
 
     // Serve static files
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -271,6 +284,11 @@ export function createMindServer(host_public = false, port = 8080) {
             io.emit('bot-output', agentName, message);
         });
 
+        socket.on('telemetry-event', (event) => {
+            const recorded = telemetryStore?.record(event);
+            if (recorded) io.emit('telemetry-event', recorded);
+        });
+
         socket.on('listen-to-agents', () => {
             addListener(socket);
         });
@@ -279,9 +297,16 @@ export function createMindServer(host_public = false, port = 8080) {
     if (host_public) {
         console.log('Public hosting not supported yet. Using localhost.');
     }
-    const host = 'localhost';
+    // Bind explicitly to IPv4 loopback so local Fabric clients and Node tools
+    // resolve the same endpoint; this remains local-only and is not public
+    // exposure.
+    const host = '127.0.0.1';
     server.listen(port, host, () => {
         console.log(`MindServer running on port ${port} on host ${host}`);
+        if (telemetryStore?.enabled) {
+            console.log(`MCT telemetry enabled: ${telemetryStore.dir}`);
+            startTelemetryPolling();
+        }
     });
 
     return server;
@@ -306,24 +331,59 @@ function agentsStatusUpdate(socket) {
 
 
 let listenerInterval = null;
+let telemetryInterval = null;
+let telemetryPollActive = false;
+
+async function collectAgentStates() {
+    const states = {};
+    for (let agentName in agent_connections) {
+        let agent = agent_connections[agentName];
+        if (agent.in_game) {
+            try {
+                states[agentName] = await new Promise((resolve) => {
+                    agent.socket.emit('get-full-state', (s) => resolve(s));
+                });
+            } catch (e) {
+                states[agentName] = { error: String(e) };
+            }
+        }
+    }
+    return states;
+}
+
+function startTelemetryPolling() {
+    if (telemetryInterval) return;
+    telemetryInterval = setInterval(async () => {
+        if (telemetryPollActive) return;
+        telemetryPollActive = true;
+        try {
+            const states = await collectAgentStates();
+            for (const [agentName, state] of Object.entries(states)) {
+                if (!state || state.error) continue;
+                const gameplay = state.gameplay || {};
+                telemetryStore.record({
+                    kind: 'agent.state_snapshot',
+                    source: 'mindserver',
+                    agent_id: agentName,
+                    entity_id: agentName,
+                    dimension: gameplay.dimension || null,
+                    world_tick: gameplay.timeOfDay ?? null,
+                    origin: 'minecraft',
+                    payload: state
+                });
+            }
+        } finally {
+            telemetryPollActive = false;
+        }
+    }, 1000);
+    telemetryInterval.unref?.();
+}
+
 function addListener(listener_socket) {
     agent_listeners.push(listener_socket);
     if (agent_listeners.length === 1) {
         listenerInterval = setInterval(async () => {
-            const states = {};
-            for (let agentName in agent_connections) {
-                let agent = agent_connections[agentName];
-                if (agent.in_game) {
-                    try {
-                        const state = await new Promise((resolve) => {
-                            agent.socket.emit('get-full-state', (s) => resolve(s));
-                        });
-                        states[agentName] = state;
-                    } catch (e) {
-                        states[agentName] = { error: String(e) };
-                    }
-                }
-            }
+            const states = await collectAgentStates();
             for (let listener of agent_listeners) {
                 listener.emit('state-update', states);
             }
@@ -343,3 +403,4 @@ function removeListener(listener_socket) {
 export const getIO = () => io;
 export const getServer = () => server;
 export const numStateListeners = () => agent_listeners.length;
+export const getTelemetryStore = () => telemetryStore;
