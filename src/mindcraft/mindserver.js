@@ -335,7 +335,9 @@ let listenerInterval = null;
 let telemetryInterval = null;
 let telemetryPollActive = false;
 let stateCollectionPromise = null;
-const stateRequestTimeoutMs = Math.max(100, Number.parseInt(process.env.MCT_STATE_REQUEST_TIMEOUT_MS || '800', 10));
+const configuredStateRequestTimeoutMs = Number.parseInt(process.env.MCT_STATE_REQUEST_TIMEOUT_MS || '800', 10);
+const stateRequestTimeoutMs = Number.isFinite(configuredStateRequestTimeoutMs)
+    ? Math.max(100, configuredStateRequestTimeoutMs) : 800;
 const stateRequestErrors = new Map();
 
 function requestAgentState(agentName, agent) {
