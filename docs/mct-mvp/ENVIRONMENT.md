@@ -42,4 +42,4 @@
 
 本机缺少 `config/mct-mvp/model.local.json`，也没有为本轮读取或复制旧工程密钥；真实 LLM、embedding、三人旅行和费用验证因此保持未执行。
 
-生存环境已完成一次非模型连接核对：服务端 `gamemode=survival`、`difficulty=normal`、`doDaylightCycle=true`、`doMobSpawning=true`；Fabric 客户端成功进入世界，服务端查询玩家模式为 0、生命 20、食物 20。核对后已停止客户端和服务端，保留 `run/ordinary-survival-1.20.1` 存档。
+生存环境已完成一次非模型连接核对：服务端 `gamemode=survival`、`difficulty=normal`、`doDaylightCycle=true`、`doMobSpawning=true`；Fabric 客户端成功进入世界，服务端查询玩家模式为 0、生命 20、食物 20。核对后已停止客户端和服务端。后续验收使用 `world-mvp` 存档；先前远距离传送勘察产生的 `world` 存档保留为失败探针证据，不作为正式路线世界。

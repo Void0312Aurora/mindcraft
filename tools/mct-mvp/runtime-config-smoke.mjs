@@ -11,6 +11,7 @@ assert.equal(survival.minecraft.server, 'ordinary-survival-1.20.1');
 assert.equal(survival.minecraft.rcon_port, 25576);
 assert.equal(survival.gameplay.gamemode, 'survival');
 assert.equal(survival.gameplay.difficulty, 'normal');
+assert.equal(survival.gameplay.level_name, 'world-mvp');
 assert.equal(survival.gameplay.spawn_monsters, true);
 assert.equal(survival.gameplay.spawn_animals, true);
 assert.equal(survival.mindserver.port, 8082);
