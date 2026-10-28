@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MCT 过程观测演示</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root { color-scheme: dark; --bg:#10151d; --panel:#182230; --line:#2b3b4e; --muted:#91a4b8; --good:#5eead4; --warn:#fbbf24; }
+    * { box-sizing: border-box; }
+    body { margin:0; padding:20px; background:var(--bg); color:#e8eef5; font:14px/1.45 system-ui, sans-serif; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; }
+    h1,h2,h3 { margin:0; }
+    h1 { font-size:22px; }
+    h2 { font-size:15px; margin-bottom:10px; }
+    button { border:1px solid var(--line); border-radius:6px; padding:7px 12px; color:#071217; background:var(--good); cursor:pointer; font-weight:700; }
+    button:disabled { cursor:not-allowed; opacity:.4; }
+    #resumeBtn { background:var(--warn); }
+    .status { color:var(--muted); }
+    .layout { display:grid; grid-template-columns:minmax(360px, 1.25fr) minmax(320px, 1fr); gap:14px; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:14px; min-width:0; }
+    .wide { grid-column:1/-1; }
+    #map { width:100%; height:360px; background:#0d1722; border:1px solid var(--line); border-radius:6px; }
+    .legend { display:flex; gap:16px; flex-wrap:wrap; margin-top:8px; color:var(--muted); }
+    .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; }
+    #agents { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:12px; }
+    .agent-card { background:#111b27; border:1px solid var(--line); border-radius:6px; padding:8px; }
+    .agent-name { font-weight:700; margin-bottom:4px; }
+    .muted { color:var(--muted); }
+    #timeline { max-height:360px; overflow:auto; display:flex; flex-direction:column; gap:5px; }
+    .event { border:1px solid transparent; border-left:3px solid #60758a; background:#111b27; border-radius:4px; padding:7px 8px; cursor:pointer; }
+    .event:hover,.event.selected { border-color:var(--good); }
+    .event.decision { border-left-color:#c4b5fd; }
+    .event.action { border-left-color:var(--warn); }
+    .event.message { border-left-color:#60a5fa; }
+    .event.world { border-left-color:#fb7185; }
+    .event-title { font-weight:700; }
+    #details { min-height:120px; white-space:pre-wrap; overflow:auto; color:#dbe7f2; }
+    .empty { color:var(--muted); }
+    @media (max-width:900px) { .layout { grid-template-columns:1fr; } #agents { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div><h1>MCT 过程观测演示</h1><div class="status">脚本 agent · 无 LLM · 无 Minecraft/Tellus 依赖</div></div>
+    <div><strong id="runStatus">连接中</strong> <button id="pauseBtn">暂停</button> <button id="resumeBtn" disabled>继续</button></div>
+  </header>
+  <div class="layout">
+    <section class="panel"><h2>轨迹</h2><canvas id="map" width="900" height="500"></canvas><div class="legend"><span><i class="dot" style="background:#5eead4"></i>MCT_A</span><span><i class="dot" style="background:#fbbf24"></i>MCT_B</span><span><i class="dot" style="background:#c4b5fd"></i>MCT_C</span><span>A(0,0) → B(100,70)</span></div><div id="agents"></div></section>
+    <section class="panel"><h2>事件时间线</h2><div id="timeline"><div class="empty">等待事件…</div></div></section>
+    <section class="panel wide"><h2>事件详情</h2><div id="details" class="empty">点击时间线中的决策、动作或世界事件。</div></section>
+  </div>
+  <script>
+    const socket = io();
+    const state = { snapshot:null, selected:null };
+    const colors = { MCT_A:'#5eead4', MCT_B:'#fbbf24', MCT_C:'#c4b5fd' };
+    const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const runStatus = document.getElementById('runStatus');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
+    pauseBtn.onclick = () => socket.emit('control-run','pause');
+    resumeBtn.onclick = () => socket.emit('control-run','resume');
+    socket.on('observability-snapshot', snapshot => { state.snapshot = snapshot; render(); });
+    socket.on('observability-event', event => { if (!state.snapshot) return; state.snapshot.events.push(event); render(); });
+    function render() {
+      const s = state.snapshot; if (!s) return;
+      runStatus.textContent = `${s.run.status} · ${s.run.runId}`;
+      pauseBtn.disabled = s.run.status !== 'running';
+      resumeBtn.disabled = s.run.status !== 'paused';
+      renderMap(s); renderAgents(s); renderTimeline(s); renderDetails(s);
+    }
+    function renderMap(s) {
+      const canvas=document.getElementById('map'), ctx=canvas.getContext('2d'), w=canvas.width, h=canvas.height;
+      ctx.clearRect(0,0,w,h); ctx.fillStyle='#0d1722'; ctx.fillRect(0,0,w,h);
+      const pad=45, sx=(w-pad*2)/110, sz=(h-pad*2)/80, xy=(x,z)=>[pad+x*sx,h-pad-z*sz];
+      ctx.strokeStyle='#203347'; ctx.lineWidth=1; for(let x=0;x<=100;x+=10){let [px]=xy(x,0);ctx.beginPath();ctx.moveTo(px,pad);ctx.lineTo(px,h-pad);ctx.stroke();} for(let z=0;z<=70;z+=10){let [,pz]=xy(0,z);ctx.beginPath();ctx.moveTo(pad,pz);ctx.lineTo(w-pad,pz);ctx.stroke();}
+      for(const [name,path] of Object.entries(s.trajectories||{})){ctx.strokeStyle=colors[name]||'#fff';ctx.lineWidth=3;ctx.beginPath();path.forEach((p,i)=>{const [px,pz]=xy(p.x,p.z);i?ctx.lineTo(px,pz):ctx.moveTo(px,pz);});ctx.stroke(); const last=path[path.length-1];if(last){const [px,pz]=xy(last.x,last.z);ctx.fillStyle=colors[name];ctx.beginPath();ctx.arc(px,pz,5,0,Math.PI*2);ctx.fill();}}
+      ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif'; let [ax,az]=xy(0,0);ctx.fillText('A',ax-14,az+5);let [bx,bz]=xy(100,70);ctx.fillText('B',bx+8,bz+5);
+    }
+    function renderAgents(s){const box=document.getElementById('agents');box.innerHTML=Object.entries(s.agents||{}).map(([n,a])=>`<div class="agent-card"><div class="agent-name" style="color:${colors[n]||'#fff'}">${n}</div><div>位置 (${Number(a.position?.x||0).toFixed(1)}, ${Number(a.position?.z||0).toFixed(1)})</div><div>生命 ${a.health} · 食物 ${Number(a.hunger||0).toFixed(1)}</div><div class="muted">${esc(a.action)}</div></div>`).join('');}
+    function renderTimeline(s){const box=document.getElementById('timeline');const events=(s.events||[]).slice().reverse();box.innerHTML=events.map(e=>`<div class="event ${e.type} ${state.selected===e.seq?'selected':''}" data-seq="${e.seq}"><div class="event-title">#${e.seq} ${esc(e.agent||'WORLD')} · ${esc(e.type)}</div><div class="muted">${new Date(e.wallTime).toLocaleTimeString()} · ${esc(e.data?.phase||e.data?.event||e.data?.label||e.data?.message||'')}</div></div>`).join('')||'<div class="empty">等待事件…</div>';box.querySelectorAll('.event').forEach(el=>el.onclick=()=>{state.selected=Number(el.dataset.seq);render();});}
+    function renderDetails(s){const box=document.getElementById('details');const e=(s.events||[]).find(x=>x.seq===state.selected);if(!e){box.className='empty';box.textContent='点击时间线中的决策、动作或世界事件。';return;}box.className='';box.textContent=JSON.stringify(e,null,2);}
+  </script>
+</body>
+</html>

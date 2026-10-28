@@ -1,0 +1,4 @@
+{
+  "model": {"api": "openai", "model": "REPLACE_WITH_CHOSEN_MODEL"},
+  "embedding": {"api": "openai", "model": "REPLACE_WITH_CHOSEN_EMBEDDING_MODEL"}
+}

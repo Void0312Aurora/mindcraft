@@ -1,0 +1,8 @@
+{
+  "agents": ["MCT_A", "MCT_B", "MCT_C"],
+  "route": {"start": null, "destination": null, "arrivalRadius": 12},
+  "requiredNights": 1,
+  "sleepPolicy": "pending",
+  "initialItemsPerAgent": {"stone_axe": 1, "stone_pickaxe": 1, "oak_log": 4, "bread": 2, "torch": 4},
+  "notes": "Initial items are a proposal. Survey A/B and decide the sleep policy before starting a model run. No route or survival result has been validated."
+}

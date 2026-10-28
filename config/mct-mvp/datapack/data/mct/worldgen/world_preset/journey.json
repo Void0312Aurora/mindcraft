@@ -1,0 +1,47 @@
+{
+  "dimensions": {
+    "minecraft:overworld": {
+      "type": "minecraft:overworld",
+      "generator": {
+        "type": "tellus:earth",
+        "biome_source": {
+          "type": "tellus:earth",
+          "settings": {
+            "world_scale": 30.0,
+            "spawn_latitude": 30.65,
+            "spawn_longitude": 103.95,
+            "min_altitude": -64,
+            "max_altitude": 320,
+            "realtime_time": false,
+            "realtime_weather": false,
+            "experimental_increase_height": false
+          }
+        },
+        "settings": {
+          "world_scale": 30.0,
+          "spawn_latitude": 30.65,
+          "spawn_longitude": 103.95,
+          "min_altitude": -64,
+          "max_altitude": 320,
+          "realtime_time": false,
+          "realtime_weather": false,
+          "experimental_increase_height": false,
+          "cave_generation": true,
+          "ore_distribution": true
+        }
+      }
+    },
+    "minecraft:the_nether": {
+      "type": "minecraft:the_nether",
+      "generator": {
+        "type": "minecraft:noise",
+        "biome_source": {"type": "minecraft:multi_noise", "preset": "minecraft:nether"},
+        "settings": "minecraft:nether"
+      }
+    },
+    "minecraft:the_end": {
+      "type": "minecraft:the_end",
+      "generator": {"type": "minecraft:noise", "biome_source": {"type": "minecraft:the_end"}, "settings": "minecraft:end"}
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "project": "mindcraft-mct-mvp",
+  "defaultProfile": "ordinary-observability",
+  "profiles": {
+    "journey": {
+      "servers": ["tellus-mvp-1.20.1"],
+      "clients": ["fabric-mindcraft-mvp-1.20.1"]
+    },
+    "ordinary-observability": {
+      "servers": ["ordinary-mvp-1.20.1"],
+      "clients": ["fabric-mindcraft-mvp-1.20.1"]
+    }
+  },
+  "servers": {
+    "ordinary-mvp-1.20.1": {
+      "jar": "server.jar",
+      "java": "C:\\Program Files\\Microsoft\\jdk-17.0.12.7-hotspot\\bin\\java.exe",
+      "jvmArgs": ["-Xms512M", "-Xmx2G"]
+    },
+    "tellus-mvp-1.20.1": {
+      "jar": "server.jar",
+      "java": "C:\\Program Files\\Microsoft\\jdk-17.0.12.7-hotspot\\bin\\java.exe",
+      "jvmArgs": [
+        "-Xms512M", "-Xmx3G", "-Dtellus.chunkgen.threads.max=2",
+        "-Dhttp.proxyHost=127.0.0.1", "-Dhttp.proxyPort=7897",
+        "-Dhttps.proxyHost=127.0.0.1", "-Dhttps.proxyPort=7897"
+      ]
+    }
+  },
+  "timeout": {"serverReady": 180, "clientReady": 90, "default": 15},
+  "screenshot": {"outputDir": ".mct/screenshots"}
+}

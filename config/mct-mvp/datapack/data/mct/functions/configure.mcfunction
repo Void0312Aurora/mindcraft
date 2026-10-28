@@ -1,0 +1,6 @@
+gamerule doDaylightCycle true
+gamerule doMobSpawning true
+gamerule doWeatherCycle true
+gamerule naturalRegeneration true
+gamerule keepInventory false
+gamerule playersSleepingPercentage 100
