@@ -12,13 +12,48 @@
         "client": "fabric-mindcraft-mvp-1.20.1",
         "rcon_port": 25575
       },
+      "gameplay": {
+        "gamemode": "creative",
+        "difficulty": "peaceful",
+        "force_gamemode": true,
+        "level_seed": "mct-observability-20261028",
+        "spawn_monsters": false,
+        "spawn_animals": false,
+        "pvp": false,
+        "allow_flight": true
+      },
       "mindserver": {
         "host": "127.0.0.1",
         "port": 8080
       }
     },
+    "survival": {
+      "purpose": "普通 Minecraft 生存旅行环境；真实 Mindcraft Agent 的默认目标",
+      "minecraft": {
+        "host": "127.0.0.1",
+        "port": 25587,
+        "version": "1.20.1",
+        "server": "ordinary-survival-1.20.1",
+        "client": "fabric-mindcraft-mvp-1.20.1",
+        "rcon_port": 25576
+      },
+      "gameplay": {
+        "gamemode": "survival",
+        "difficulty": "normal",
+        "force_gamemode": false,
+        "level_seed": "mct-survival-20261028",
+        "spawn_monsters": true,
+        "spawn_animals": true,
+        "pvp": true,
+        "allow_flight": false
+      },
+      "mindserver": {
+        "host": "127.0.0.1",
+        "port": 8082
+      }
+    },
     "journey": {
-      "purpose": "独立的 Survival/Journey 环境；不作为 Observatory 默认环境",
+      "purpose": "历史 Tellus 环境；不作为真实 Agent 默认环境",
       "minecraft": {
         "host": "127.0.0.1",
         "port": 25585,

@@ -116,4 +116,4 @@ $env:MCT_RUNTIME_PROFILE = 'observatory'
 npm run mct:single-agent-observer-check
 ```
 
-需要自动化推进检查点时可设置 `$env:MCT_AUTO_CONTINUE = '1'`；默认不设置时仍可逐个 Enter 观察。它验证普通世界、单个脚本 Agent、观察客户端和运行隔离；不验证 LLM、过夜、饥饿或完整暂停。真实 Mindcraft Agent 仍需已授权的模型和 embedding 配置，当前缺少 `config/mct-mvp/model.local.json`，因此不能宣称真实 LLM 闭环已通过。
+需要自动化推进检查点时可设置 `$env:MCT_AUTO_CONTINUE = '1'`；默认不设置时仍可逐个 Enter 观察。它验证普通世界、单个脚本 Agent、观察客户端和运行隔离；不验证 LLM、过夜、饥饿或完整暂停。真实 Mindcraft Agent 仍需已授权的模型和 embedding 配置，当前缺少 `config/mct-mvp/model.local.json`，因此不能宣称真实 LLM 闭环已通过。生存 profile 已准备好，启动前还需确定 A/B 坐标、起始物资和 `sleepPolicy`；启动器默认连接 `ordinary-survival-1.20.1`，不会连接历史 Tellus profile。

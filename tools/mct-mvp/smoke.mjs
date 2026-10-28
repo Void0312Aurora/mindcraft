@@ -4,9 +4,10 @@ import { setSettings } from '../../src/agent/settings.js';
 import { initBot } from '../../src/utils/mcdata.js';
 import { runtimeEnvironment } from './runtime-config.mjs';
 
-const runtime = runtimeEnvironment(process.env.MCT_SMOKE_RUNTIME_PROFILE || 'journey');
+const runtime = runtimeEnvironment(process.env.MCT_SMOKE_RUNTIME_PROFILE || 'survival');
 setSettings({ host: runtime.minecraft.host, port: runtime.minecraft.port, auth: 'offline', minecraft_version: runtime.minecraft.version });
-const expectedGameMode = process.env.MCT_EXPECTED_GAMEMODE || (runtime.name === 'journey' ? 'survival' : null);
+const expectedGameMode = process.env.MCT_EXPECTED_GAMEMODE
+    || (runtime.gameplay?.gamemode === 'survival' ? 'survival' : null);
 const names = ['MCT_Probe_A', 'MCT_Probe_B', 'MCT_Probe_C'];
 const bots = [];
 const results = [];

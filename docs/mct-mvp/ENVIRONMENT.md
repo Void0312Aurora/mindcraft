@@ -38,6 +38,8 @@
 
 ## 2026-10-28 复核补充
 
-本次集成复核使用 `config/mct-mvp/runtime.json` 的 `observatory` profile：普通 1.20.1 服务端 `ordinary-mvp-1.20.1`（25586）、Fabric 观察客户端 `fabric-mindcraft-mvp-1.20.1`、MindServer 8080。脚本 Agent 实际入服并完成抵达、中断、改令三阶段；运行结束后客户端、服务端和脚本 MindServer 已停止，世界与运行证据保留。`journey` profile 仍单独指向 25585/8086，不参与本次 Observatory 复核。
+本次集成复核使用 `config/mct-mvp/runtime.json` 的 `observatory` profile：普通 1.20.1 创意服务端 `ordinary-mvp-1.20.1`（25586）、Fabric 观察客户端 `fabric-mindcraft-mvp-1.20.1`、MindServer 8080。脚本 Agent 实际入服并完成抵达、中断、改令三阶段；运行结束后客户端、服务端和脚本 MindServer 已停止，世界与运行证据保留。新增的 `survival` profile 指向独立普通生存服务端 `ordinary-survival-1.20.1`（25587 / MindServer 8082），`journey` profile 仍单独指向 25585/8086 的历史 Tellus 环境。
 
 本机缺少 `config/mct-mvp/model.local.json`，也没有为本轮读取或复制旧工程密钥；真实 LLM、embedding、三人旅行和费用验证因此保持未执行。
+
+生存环境已完成一次非模型连接核对：服务端 `gamemode=survival`、`difficulty=normal`、`doDaylightCycle=true`、`doMobSpawning=true`；Fabric 客户端成功进入世界，服务端查询玩家模式为 0、生命 20、食物 20。核对后已停止客户端和服务端，保留 `run/ordinary-survival-1.20.1` 存档。

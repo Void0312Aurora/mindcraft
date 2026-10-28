@@ -9,10 +9,19 @@
     "ordinary-observability": {
       "servers": ["ordinary-mvp-1.20.1"],
       "clients": ["fabric-mindcraft-mvp-1.20.1"]
+    },
+    "ordinary-survival": {
+      "servers": ["ordinary-survival-1.20.1"],
+      "clients": ["fabric-mindcraft-mvp-1.20.1"]
     }
   },
   "servers": {
     "ordinary-mvp-1.20.1": {
+      "jar": "server.jar",
+      "java": "C:\\Program Files\\Microsoft\\jdk-17.0.12.7-hotspot\\bin\\java.exe",
+      "jvmArgs": ["-Xms512M", "-Xmx2G"]
+    },
+    "ordinary-survival-1.20.1": {
       "jar": "server.jar",
       "java": "C:\\Program Files\\Microsoft\\jdk-17.0.12.7-hotspot\\bin\\java.exe",
       "jvmArgs": ["-Xms512M", "-Xmx2G"]

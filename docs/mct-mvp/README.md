@@ -51,7 +51,7 @@ npm run mct:ingame-observability-demo
 
 ## 已有 Tellus 环境操作（历史检查）
 
-以下命令仍指向先前建立的 Tellus 环境，保留供查阅。当前默认是 `ordinary-observability` 普通世界配置；测试级整体暂停尚未实现。
+以下命令仍指向先前建立的 Tellus 环境，保留供查阅。当前默认 profile 是 `ordinary-observability`，真实 Agent 启动器默认使用独立的 `survival` profile；测试级整体暂停尚未实现。
 
 在仓库根目录使用 PowerShell：
 
@@ -90,19 +90,28 @@ node tools/mct-mvp/start-agents.mjs
 
 当前上游仍有单一交谈对象限制；本轮环境准备没有实现 issue #1 的多人调度改造。`language=en` 用于关闭额外的 Google 翻译调用；任务提示要求角色用中文交流。
 
+生存环境准备命令（不启动模型）：
+
+```powershell
+$env:MCT_RUNTIME_SOURCE = (Resolve-Path 'run/ordinary-mvp-1.20.1').Path
+$env:MCT_RUNTIME_PROFILE = 'survival'
+.\tools\mct-mvp\prepare-ordinary.ps1
+.\tools\mct-mvp\mct.ps1 server start ordinary-survival-1.20.1 --eula
+```
+
 ## 当前运行配置与验收边界
 
-运行配置集中在 `config/mct-mvp/runtime.json`。默认 `observatory` 指向普通 1.20.1 世界（25586 / MindServer 8080），`journey` 单独保留生存旅行环境（25585 / MindServer 8086）；脚本和观察端通过 `MCT_RUNTIME_PROFILE` 选择，不再在多个脚本中分别写死端口。`node tools/mct-mvp/runtime-config-smoke.mjs` 会检查两个 profile 及环境变量覆盖。
+运行配置集中在 `config/mct-mvp/runtime.json`。`observatory` 指向创意观察世界（25586 / MindServer 8080），`survival` 指向独立的普通生存世界（25587 / MindServer 8082），`journey` 只保留历史 Tellus 环境（25585 / MindServer 8086）。脚本和观察端通过 `MCT_RUNTIME_PROFILE` 选择，不再在多个脚本中分别写死端口。`start-agents.mjs` 和 `smoke.mjs` 默认使用 `survival`；`node tools/mct-mvp/runtime-config-smoke.mjs` 会检查三个 profile 及环境变量覆盖。
 
-当前已通过的是普通世界中的单脚本 Agent 观察链：真实 Mineflayer / Pathfinder 完成抵达、中断和改令，且轨迹、决策和动作事件可在 Observatory 中读取。它不等同于真实 LLM 旅行；仓库没有 `config/mct-mvp/model.local.json`，因此没有启动模型或产生付费调用。过夜、饥饿、三 Agent 协作和整体暂停仍未验收。
+当前已通过的是创意观察世界中的单脚本 Agent 观察链：真实 Mineflayer / Pathfinder 完成抵达、中断和改令，且轨迹、决策和动作事件可在 Observatory 中读取。新的生存服务端已经完成启动、客户端入服和生存状态核对，但还没有在其中运行真实 Agent。脚本链不等同于真实 LLM 旅行；仓库没有 `config/mct-mvp/model.local.json`，因此没有启动模型或产生付费调用。过夜、饥饿、三 Agent 协作和整体暂停仍未验收。
 
 ## 已有环境范围
 
-专用服务端位于 `run/tellus-mvp-1.20.1`，观察客户端为 `fabric-mindcraft-mvp-1.20.1`。服务器仅绑定本机 `127.0.0.1:25585`，MindServer 预留 `8086`，观察客户端控制端口为 `25582`。
+生存服务端位于 `run/ordinary-survival-1.20.1`（25587 / MindServer 8082），观察服务端位于 `run/ordinary-mvp-1.20.1`（25586 / MindServer 8080），观察客户端为 `fabric-mindcraft-mvp-1.20.1`。历史 Tellus 服务端仍位于 `run/tellus-mvp-1.20.1`（25585 / MindServer 8086），不属于 Mindcraft 的必要依赖。
 
 Tellus 使用普通区域地球生成器，缩尺 30，成都附近仅作为环境准备的临时地理起点；它还不是正式 A 点。普通 Overworld 高度范围用于降低首轮适配负担。本 MVP 不要求跨越 cube-net 接缝。昼夜、天气不与现实时间同步。
 
-这套配置是此前环境检查的产物，不是 Mindcraft 的必要依赖，也不是修订后的普通世界测试基线。`mct.json` 当前已默认指向普通世界 `ordinary-mvp-1.20.1`（端口 25586），观察客户端端口 25582、只读记录服务端口 8080。`prepare.ps1` 仍属于历史 Tellus 准备工具，不能当作普通世界构建器。
+这套配置是此前环境检查的产物，不是 Mindcraft 的必要依赖，也不是修订后的普通世界测试基线。`mct.json` 当前默认指向观察世界 `ordinary-mvp-1.20.1`（端口 25586），另有 `ordinary-survival` profile 指向生存服务端；观察客户端控制端口 25582、只读记录服务端口 8080。`prepare-ordinary.ps1` 按 `MCT_RUNTIME_PROFILE` 生成普通世界，默认生成生存 profile，不复制 Tellus JAR。
 
 运行文件、存档、原始日志和本地模型配置被 Git 忽略。保留上游源码的行为；固定 Mineflayer 为上游补丁对应的 4.33.0，并添加可选事件接入和观察端。没有复制旧工程的密钥或角色配置。
 

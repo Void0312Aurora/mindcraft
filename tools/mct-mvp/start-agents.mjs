@@ -11,7 +11,7 @@ const model = read(modelPath);
 if (!model.model?.model || /REPLACE|CHOSEN/.test(model.model.model)) throw new Error('Choose a real model first.');
 if (!model.embedding?.model || /REPLACE|CHOSEN/.test(model.embedding.model)) throw new Error('Configure the embedding model and its provider explicitly; Mindcraft initializes skill embeddings on startup.');
 const scenario = read('config/mct-mvp/scenario.json');
-const runtime = runtimeEnvironment(process.env.MCT_RUNTIME_PROFILE || 'journey');
+const runtime = runtimeEnvironment(process.env.MCT_RUNTIME_PROFILE || 'survival');
 if (!scenario.route.start || !scenario.route.destination) throw new Error('Survey and set A/B before starting the journey.');
 if (!['allow-sleep', 'full-night'].includes(scenario.sleepPolicy)) throw new Error('Choose sleepPolicy: allow-sleep or full-night.');
 for (const point of [scenario.route.start, scenario.route.destination]) {
