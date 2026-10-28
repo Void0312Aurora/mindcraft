@@ -1,0 +1,7 @@
+{
+  "key.category.mct_observatory": "MCT Observatory",
+  "key.mct_observatory.toggle": "Show or hide observation overlay",
+  "key.mct_observatory.inspect": "Open event inspector",
+  "key.mct_observatory.select": "Select observed agent",
+  "key.mct_observatory.mode": "Toggle compact broadcast view"
+}

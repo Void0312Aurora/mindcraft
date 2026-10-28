@@ -1,0 +1,55 @@
+plugins {
+    id 'net.fabricmc.fabric-loom-remap' version '1.14.10'
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+repositories {
+    maven { name = 'WispForest'; url = 'https://maven.wispforest.io/releases/'; content { includeGroup 'io.wispforest' } }
+    maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    modImplementation(include("io.wispforest:owo-lib:0.11.2+1.20")) { transitive = false }
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand 'version': project.version }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+}
+
+test {
+    // The regression harness is a JavaExec task because the client model is
+    // deliberately independent of a test framework and Minecraft runtime.
+    failOnNoDiscoveredTests = false
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+jar {
+    from('LICENSE') { rename { "${it}_${project.archives_base_name}" } }
+    from('THIRD_PARTY_NOTICES.md')
+}
+
+tasks.register('stateSmoke', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'void0312aurora.mct.observatory.ObservatoryStateSmoke'
+}
+
+check.dependsOn stateSmoke

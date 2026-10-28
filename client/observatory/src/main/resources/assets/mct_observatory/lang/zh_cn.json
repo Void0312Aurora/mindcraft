@@ -1,0 +1,7 @@
+{
+  "key.category.mct_observatory": "MCT 观察工具",
+  "key.mct_observatory.toggle": "显示或隐藏观察叠加",
+  "key.mct_observatory.inspect": "打开事件检查器",
+  "key.mct_observatory.select": "选择观察角色",
+  "key.mct_observatory.mode": "切换简化播出视图"
+}
