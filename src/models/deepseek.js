@@ -14,6 +14,13 @@ export class DeepSeek {
         config.apiKey = getKey('DEEPSEEK_API_KEY');
 
         this.openai = new OpenAIApi(config);
+        this.reasoningFor = new Map(); // reply text -> reasoning, consumed by takeReasoning
+    }
+
+    takeReasoning(reply) {
+        const reasoning = this.reasoningFor.get(reply) ?? null;
+        this.reasoningFor.delete(reply);
+        return reasoning;
     }
 
     async sendRequest(turns, systemMessage, stop_seq='***') {
@@ -37,6 +44,15 @@ export class DeepSeek {
                 throw new Error('Context length exceeded'); 
             console.log('Received.')
             res = completion.choices[0].message.content;
+            // Thinking mode returns its reasoning separately. Keep it per request
+            // (chat, coding and memory calls overlap on this object) so an empty or
+            // odd reply can be explained afterwards.
+            const reasoning = completion.choices[0].message.reasoning_content;
+            if (reasoning && typeof res === 'string') {
+                this.reasoningFor.set(res, reasoning);
+                // Replies discarded before logging never get taken; keep only recent ones.
+                if (this.reasoningFor.size > 16) this.reasoningFor.delete(this.reasoningFor.keys().next().value);
+            }
         }
         catch (err) {
             if ((err.message == 'Context length exceeded' || err.code == 'context_length_exceeded') && turns.length > 1) {

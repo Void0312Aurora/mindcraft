@@ -232,7 +232,7 @@ export class Prompter {
                     throw new Error('Generated response is not a string');
                 }
                 console.log("Generated response:", generation);
-                await this._saveLog(prompt, messages, generation, 'conversation');
+                await this._saveLog(prompt, messages, generation, 'conversation', this.chat_model);
 
             } catch (error) {
                 console.error('Error during message generation or file writing:', error);
@@ -255,6 +255,15 @@ export class Prompter {
                 generation = afterThink
             }
 
+            // A truly empty reply ends the agent's response loop and, outside
+            // !goal self-prompting, nothing wakes it again. The model produces one
+            // rarely and not reproducibly, so ask once more. A deliberate '\t' (the
+            // documented "nothing to do") is not empty and is kept.
+            if (generation.trim() === '' && generation !== '\t' && i === 0) {
+                console.warn(`${this.agent.name} got an empty reply from the model, retrying once.`);
+                continue;
+            }
+
             return generation;
         }
 
@@ -273,7 +282,7 @@ export class Prompter {
 
         let resp = await this.code_model.sendRequest(messages, prompt);
         this.awaiting_coding = false;
-        await this._saveLog(prompt, messages, resp, 'coding');
+        await this._saveLog(prompt, messages, resp, 'coding', this.code_model);
         return resp;
     }
 
@@ -282,7 +291,7 @@ export class Prompter {
         let prompt = this.profile.saving_memory;
         prompt = await this.replaceStrings(prompt, null, null, to_summarize);
         let resp = await this.chat_model.sendRequest([], prompt);
-        await this._saveLog(prompt, to_summarize, resp, 'memSaving');
+        await this._saveLog(prompt, to_summarize, resp, 'memSaving', this.chat_model);
         if (resp?.includes('</think>')) {
             const [_, afterThink] = resp.split('</think>')
             resp = afterThink;
@@ -334,10 +343,13 @@ export class Prompter {
         return goal;
     }
 
-    async _saveLog(prompt, messages, generation, tag) {
+    async _saveLog(prompt, messages, generation, tag, model = null) {
+        // Always consume the reasoning so the map cannot grow when logging is off.
+        const reasoning = model?.takeReasoning?.(generation) ?? null;
         if (!settings.log_all_prompts)
             return;
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        if (reasoning) generation = `${generation}\n\nReasoning:\n${reasoning}`;
         let logEntry;
         let task_id = this.agent.task.task_id;
         if (task_id == null) {

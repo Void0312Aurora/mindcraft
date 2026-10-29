@@ -73,6 +73,9 @@ export class Examples {
             console.log('Example:', example[0].content)
         }
 
+        // An empty header reads as "the conversation has no request yet", and
+        // models answer the following turn with the '\t' no-op.
+        if (selected_examples.length === 0) return '';
         let msg = 'Examples of how to respond:\n';
         for (let i=0; i<selected_examples.length; i++) {
             let example = selected_examples[i];
