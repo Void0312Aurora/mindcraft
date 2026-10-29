@@ -18,6 +18,39 @@ index 496cf63..813a667 100644
        !bot.entity.onGround,
        enchantments,
        bot.entity.effects
+diff --git a/node_modules/mineflayer/lib/plugins/entities.js b/node_modules/mineflayer/lib/plugins/entities.js
+index 666b0b3..6214509 100644
+--- a/node_modules/mineflayer/lib/plugins/entities.js
++++ b/node_modules/mineflayer/lib/plugins/entities.js
+@@ -271,7 +271,7 @@ function inject (bot) {
+     entity.pitch = conv.fromNotchianPitchByte(packet.pitch)
+     entity.headPitch = conv.fromNotchianPitchByte(packet.headPitch)
+ 
+-    const notchVel = new Vec3(packet.velocityX, packet.velocityY, packet.velocityZ)
++    const notchVel = notchVelocity(packet)
+     entity.velocity.update(conv.fromNotchVelocity(notchVel))
+     entity.metadata = parseMetadata(packet.metadata, entity.metadata)
+ 
+@@ -281,10 +281,18 @@ function inject (bot) {
+   bot._client.on('entity_velocity', (packet) => {
+     // entity velocity
+     const entity = fetchEntity(packet.entityId)
+-    const notchVel = new Vec3(packet.velocityX, packet.velocityY, packet.velocityZ)
++    const notchVel = notchVelocity(packet)
+     entity.velocity.update(conv.fromNotchVelocity(notchVel))
+   })
+ 
++  // minecraft-data >= 3.98 nests velocity as packet.velocity.{x,y,z}; reading the
++  // old velocityX fields gives NaN, and the server then kicks the bot for an
++  // invalid move packet the next time it is knocked back.
++  function notchVelocity (packet) {
++    if (packet.velocity) return new Vec3(packet.velocity.x, packet.velocity.y, packet.velocity.z)
++    return new Vec3(packet.velocityX, packet.velocityY, packet.velocityZ)
++  }
++
+   bot._client.on('entity_destroy', (packet) => {
+     // destroy entity
+     packet.entityIds.forEach((id) => {
 diff --git a/node_modules/mineflayer/lib/plugins/inventory.js b/node_modules/mineflayer/lib/plugins/inventory.js
 index 70db312..93d2054 100644
 --- a/node_modules/mineflayer/lib/plugins/inventory.js
