@@ -33,6 +33,46 @@ async function equipHighestAttack(bot) {
         await bot.equip(weapon, 'hand');
 }
 
+async function serverConfirmedCount(bot, itemName, { minMs = 600, quietMs = 200, maxMs = 2000 } = {}) {
+    // bot.craft() writes the result into the local inventory before the server
+    // confirms it. If the server does not apply the craft, its correction
+    // (set_slot / window_items on window 0) arrives shortly after and erases the
+    // item; in run 07 that happened within about a second. Count only after
+    // window 0 has been quiet for a moment, so a phantom result is not reported.
+    const start = Date.now();
+    let lastSync = start;
+    const onSync = packet => { if (packet.windowId === 0) lastSync = Date.now(); };
+    bot._client.on('window_items', onSync);
+    bot._client.on('set_slot', onSync);
+    try {
+        while (true) {
+            const now = Date.now();
+            if (now - start >= maxMs) break;
+            if (now - start >= minMs && now - lastSync >= quietMs) break;
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+    } finally {
+        bot._client.off('window_items', onSync);
+        bot._client.off('set_slot', onSync);
+    }
+    return world.getInventoryCounts(bot)[itemName] || 0;
+}
+
+function describeRecipeOptions(itemName) {
+    // Listing only the first recipe made the model conclude that e.g. a crafting
+    // table needs oak specifically; spell out the interchangeable variants.
+    const recipes = mc.getItemCraftingRecipes(itemName) || [];
+    if (recipes.length === 0) return `No crafting recipe is known for ${itemName}.`;
+    const options = [...new Set(recipes.map(([ingredients]) =>
+        Object.entries(ingredients).map(([key, value]) => `${key}: ${value}`).join(', ')))];
+    if (options.length === 1) return `It requires: ${options[0]}.`;
+    const shown = options.slice(0, 4).join(' OR ');
+    let hint = '';
+    if (options.some(o => o.includes('charcoal')))
+        hint = ' coal comes from mining coal_ore; charcoal comes from smelting any log in a furnace.';
+    return `It can be made from any one of: ${shown}${options.length > 4 ? ` (or ${options.length - 4} other variants)` : ''}.${hint}`;
+}
+
 export async function craftRecipe(bot, itemName, num=1) {
     /**
      * Attempt to craft the given item name from a recipe. May craft many items.
@@ -82,7 +122,7 @@ export async function craftRecipe(bot, itemName, num=1) {
         }
     }
     if (!recipes || recipes.length === 0) {
-        log(bot, `You do not have the resources to craft a ${itemName}. It requires: ${Object.entries(mc.getItemCraftingRecipes(itemName)[0][0]).map(([key, value]) => `${key}: ${value}`).join(', ')}.`);
+        log(bot, `You do not have the resources to craft a ${itemName}. ${describeRecipeOptions(itemName)}`);
         if (placedTable) {
             await collectBlock(bot, 'crafting_table', 1);
         }
@@ -99,10 +139,23 @@ export async function craftRecipe(bot, itemName, num=1) {
     const inventory = world.getInventoryCounts(bot); //Items in the agents inventory
     const requiredIngredients = mc.ingredientsFromPrismarineRecipe(recipe); //Items required to use the recipe once.
     const craftLimit = mc.calculateLimitingResource(inventory, requiredIngredients);
-    
-    await bot.craft(recipe, Math.min(craftLimit.num, num), craftingTable);
-    if(craftLimit.num<num) log(bot, `Not enough ${craftLimit.limitingResource} to craft ${num}, crafted ${craftLimit.num}. You now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
-    else log(bot, `Successfully crafted ${itemName}, you now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
+    const craftCount = Math.min(craftLimit.num, num);
+    const before = world.getInventoryCounts(bot)[itemName] || 0;
+
+    await bot.craft(recipe, craftCount, craftingTable);
+    // bot.craft() writes the result into the local window before the server
+    // confirms it, so the count read right away can be an item that never existed.
+    // Wait for the server's inventory sync, then report what it says.
+    const after = await serverConfirmedCount(bot, itemName);
+    if (after <= before) {
+        log(bot, `Crafting ${itemName} did not take effect on the server: you still have ${after} ${itemName}. Check your inventory and try again.`);
+        if (placedTable) {
+            await collectBlock(bot, 'crafting_table', 1);
+        }
+        return false;
+    }
+    if(craftLimit.num<num) log(bot, `Not enough ${craftLimit.limitingResource} to craft ${num}, crafted ${craftLimit.num}. You now have ${after} ${itemName}.`);
+    else log(bot, `Successfully crafted ${itemName}, you now have ${after} ${itemName}.`);
     if (placedTable) {
         await collectBlock(bot, 'crafting_table', 1);
     }
@@ -694,7 +747,9 @@ export async function placeBlock(bot, blockType, x, y, z, placeOn='bottom', dont
         block_item = bot.inventory.findInventoryItem(item_name);
     }
     if (!block_item) {
-        log(bot, `Don't have any ${item_name} to place.`);
+        // Say how to get it; without this the model gave up on light two nights running.
+        const recipes = mc.getItemCraftingRecipes(item_name);
+        log(bot, `Don't have any ${item_name} to place.` + (recipes ? ` ${describeRecipeOptions(item_name)}` : ''));
         return false;
     }
 
@@ -751,15 +806,26 @@ export async function placeBlock(bot, blockType, x, y, z, placeOn='bottom', dont
     }
 
     const pos = bot.entity.position;
-    const pos_above = pos.plus(Vec3(0,1,0));
-    const dont_move_for = ['torch', 'redstone_torch', 'redstone', 'lever', 'button', 'rail', 'detector_rail', 
+    const dont_move_for = ['torch', 'redstone_torch', 'redstone', 'lever', 'button', 'rail', 'detector_rail',
         'powered_rail', 'activator_rail', 'tripwire_hook', 'tripwire', 'water_bucket', 'string'];
-    if (!dont_move_for.includes(item_name) && (pos.distanceTo(targetBlock.position) < 1.1 || pos_above.distanceTo(targetBlock.position) < 1.1)) {
+    // Only step aside when the block's cell would overlap the bot's hitbox. The old
+    // corner-distance test also fired for cells merely next to the bot, walking it
+    // out of the very walls it was building around itself.
+    const t = targetBlock.position;
+    const overlapsBot = pos.x + 0.3 > t.x && pos.x - 0.3 < t.x + 1
+        && pos.z + 0.3 > t.z && pos.z - 0.3 < t.z + 1
+        && pos.y + 1.8 > t.y && pos.y < t.y + 1;
+    if (!dont_move_for.includes(item_name) && overlapsBot) {
         // too close
+        const before = pos.floored();
         let goal = new pf.goals.GoalNear(targetBlock.position.x, targetBlock.position.y, targetBlock.position.z, 2);
         let inverted_goal = new pf.goals.GoalInvert(goal);
         bot.pathfinder.setMovements(new pf.Movements(bot));
         await bot.pathfinder.goto(inverted_goal);
+        // Code that placed blocks around the bot's old position is now off by this move.
+        const after = bot.entity.position.floored();
+        if (!after.equals(before))
+            log(bot, `Moved from ${before} to ${after} to make room for placing ${blockType}.`);
     }
     if (bot.entity.position.distanceTo(targetBlock.position) > 4.5) {
         // too far

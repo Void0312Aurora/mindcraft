@@ -70,8 +70,39 @@ export function getSurroundingBlocks(bot) {
     res.push(`Block Below: ${getBlockAtPosition(bot, 0, -1, 0).name}`);
     res.push(`Block at Legs: ${getBlockAtPosition(bot, 0, 0, 0).name}`);
     res.push(`Block at Head: ${getBlockAtPosition(bot, 0, 1, 0).name}`);
+    res.push(`Enclosure: ${describeEnclosure(bot)}`);
 
     return res;
+}
+
+
+export function getEnclosure(bot) {
+    /**
+     * Check which of the 8 blocks beside the bot's legs and head, and the block above its head, let a mob through.
+     * @param {Bot} bot - The bot to check around.
+     * @returns {{open: string[], roof: boolean, enclosed: boolean}} - open sides as "north legs" etc., whether there is a solid roof, and whether nothing is open.
+     * @example
+     * let { enclosed, open } = world.getEnclosure(bot);
+     **/
+    const sides = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0] };
+    const solid = (dx, dy, dz) => getBlockAtPosition(bot, dx, dy, dz).boundingBox === 'block';
+    const open = [];
+    for (const [side, [dx, dz]] of Object.entries(sides)) {
+        if (!solid(dx, 0, dz)) open.push(`${side} legs`);
+        if (!solid(dx, 1, dz)) open.push(`${side} head`);
+    }
+    const roof = solid(0, 2, 0);
+    return { open, roof, enclosed: open.length === 0 && roof };
+}
+
+
+function describeEnclosure(bot) {
+    const { open, roof, enclosed } = getEnclosure(bot);
+    if (enclosed) return 'fully enclosed (walls on all sides and a roof)';
+    const parts = [];
+    if (open.length > 0) parts.push(`open at ${open.join(', ')}`);
+    if (!roof) parts.push('no roof');
+    return parts.join('; ');
 }
 
 
