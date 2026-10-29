@@ -233,11 +233,12 @@ export class Agent {
         }
     }
 
-    requestInterrupt() {
+    requestInterrupt(force = false) {
         this.bot.interrupt_code = true;
         this.bot.stopDigging();
         this.bot.collectBlock.cancelTask();
         this.bot.pathfinder.stop();
+        if (force) this.bot.pathfinder.setGoal(null); // immediate, unlike stop()
         this.bot.pvp.stop();
     }
 
@@ -317,13 +318,16 @@ export class Agent {
 
         if (!self_prompt && this.self_prompter.isActive()) // message is from user during self-prompting
             max_responses = 1; // force only respond to this message, then let self-prompting take over
+        let trigger = message; // what the next model call is reacting to
         for (let i=0; i<max_responses; i++) {
             if (checkInterrupt()) break;
             let history = this.history.getHistory();
-            const decisionId = this.telemetry?.decisionRequested(source, message, {
+            const actionEnd = i > 0 ? this.telemetry?.takeLastActionEnd() : null;
+            const decisionId = this.telemetry?.decisionRequested(i > 0 ? 'system' : source, trigger, {
                 self_prompt,
-                from_other_bot
-            });
+                from_other_bot,
+                follow_up: i > 0
+            }, actionEnd ? [actionEnd] : []);
             let res = await this.prompter.promptConvo(history);
 
             console.log(`${this.name} full response to ${source}: ""${res}""`);
@@ -348,6 +352,7 @@ export class Agent {
                 if (!commandExists(command_name)) {
                     this.history.add('system', `Command ${command_name} does not exist.`);
                     console.warn('Agent hallucinated command:', command_name)
+                    trigger = `Command ${command_name} does not exist.`;
                     continue;
                 }
 
@@ -380,8 +385,10 @@ export class Agent {
                 console.log('Agent executed:', command_name, 'and got:', execute_res);
                 used_command = true;
 
-                if (execute_res)
+                if (execute_res) {
                     this.history.add('system', execute_res);
+                    trigger = execute_res;
+                }
                 else
                     break;
             }

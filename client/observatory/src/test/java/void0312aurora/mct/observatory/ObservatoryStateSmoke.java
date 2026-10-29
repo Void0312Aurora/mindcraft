@@ -29,7 +29,13 @@ public final class ObservatoryStateSmoke {
       check(ObservatoryState.observedSegmentsFor(s.selected().observed, "overworld").size() == 2, "teleport or discontinuity must split observed trail");
       s.apply(snapshot("new", 9, "{sequence:9,agent_id:'MCT_A',kind:'navigation.goal_reached',goal_id:'g2',payload:{}}"));
       check(s.events.size() == 9, "repeated delta must not duplicate event history");
-      System.out.println("Observatory state smoke: PASS (run reset, isolation, interruption, goal correlation, deduplication)");
+      s.apply(snapshot("new", 10, "{sequence:10,agent_id:'MCT_A',kind:'decision.completed',payload:{text:'!goToCoordinates(1,65,2,1)',command:'!goToCoordinates'}}"));
+      s.apply(snapshot("new", 11, "{sequence:11,agent_id:'MCT_A',kind:'decision.completed',payload:{text:'Arrived.',command:null}}"));
+      check(s.selected().command.equals("!goToCoordinates"), "chat-only reply must keep the last command: " + s.selected().command);
+      String before = s.selected().goal.status;
+      s.apply(snapshot("new", 12, "{sequence:12,agent_id:'MCT_A',kind:'action.failed',payload:{success:false}}"));
+      check(s.selected().goal.status.equals(before), "an action without a goal must not relabel the previous goal: " + s.selected().goal.status);
+      System.out.println("Observatory state smoke: PASS (run reset, isolation, interruption, goal correlation, deduplication, command retention, goal-less failure)");
    }
    private static JsonObject snapshot(String run, int sequence, String event) {
       return JsonParser.parseString("{run_id:'" + run + "',sequence:" + sequence + ",events:[" + event + "]}").getAsJsonObject();

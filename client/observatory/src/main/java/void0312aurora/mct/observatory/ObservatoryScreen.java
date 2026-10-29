@@ -77,7 +77,7 @@ final class ObservatoryScreen extends BaseOwoScreen<FlowLayout> {
       if (!MctObservatoryClient.STATE.selectedAgent.equals(ObservatoryState.string(e, "agent_id", ""))) return false;
       String kind = ObservatoryState.string(e, "kind", "");
       return switch (filter) {
-         case 1 -> kind.startsWith("decision.") || kind.startsWith("action.");
+         case 1 -> kind.startsWith("decision.") || kind.startsWith("action.") || kind.startsWith("code.");
          case 2 -> kind.startsWith("navigation.");
          case 3 -> true;
          default -> !kind.equals("agent.position_sample") && !kind.equals("agent.state_snapshot") && !kind.equals("navigation.path_update");
@@ -140,6 +140,7 @@ final class ObservatoryScreen extends BaseOwoScreen<FlowLayout> {
          case "navigation.goal_reached" -> "抵达目标";
          case "navigation.path_reset" -> "路径重算";
          case "navigation.path_stopped" -> "寻路停止";
+         case "code.attempt" -> "生成代码尝试";
          default -> kind;
       };
    }

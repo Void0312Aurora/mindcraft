@@ -28,6 +28,9 @@ function textPayload(value) {
 export class AgentTelemetry {
     constructor(agent) {
         this.agent = agent;
+        // Mindcraft restarts a crashed agent as a new process within the same
+        // run; a per-process prefix keeps "<agent>-decision-1" from repeating.
+        this.idPrefix = `${agent.name}-${Date.now().toString(36)}`;
         this.sequence = 0;
         this.decisionSequence = 0;
         this.actionSequence = 0;
@@ -73,8 +76,8 @@ export class AgentTelemetry {
 
         bot.on('goal_updated', (goal, dynamic) => {
             if (!goal) return; // Clearing navigation is not a new spatial goal.
-            this.goalId = `${this.agent.name}-goal-${++this.goalSequence}`;
-            this.pathId = `${this.agent.name}-path-${++this.pathSequence}`;
+            this.goalId = `${this.idPrefix}-goal-${++this.goalSequence}`;
+            this.pathId = `${this.idPrefix}-path-${++this.pathSequence}`;
             this.emit('navigation.goal_set', { goal: goalSummary(goal), dynamic }, {
                 source: 'mineflayer-pathfinder', origin: 'controller', goal_id: this.goalId,
                 id: `${this.goalId}:set`,
@@ -121,11 +124,28 @@ export class AgentTelemetry {
                 source: 'mineflayer-pathfinder', origin: 'controller'
             });
         });
-        for (const event of ['sunrise', 'sunset', 'noon', 'midnight']) {
-            bot.on(event, () => this.emit('world.time_boundary', { event }, {
-                source: 'minecraft', origin: 'minecraft'
-            }));
-        }
+        // Mindcraft's own sunrise/noon/... events only fire on an exact tick,
+        // but time packets arrive every ~20 ticks, so a running clock almost
+        // never hits them. Detect crossings of each boundary instead.
+        const BOUNDARIES = [[0, 'sunrise'], [6000, 'noon'], [12000, 'sunset'], [18000, 'midnight']];
+        bot.on('time', () => {
+            const time = bot.time?.time;
+            if (!Number.isFinite(time)) return;
+            const previous = this.lastClock;
+            this.lastClock = time;
+            if (!Number.isFinite(previous) || time <= previous) {
+                // First sample, frozen clock or /time set backwards: only an exact boundary counts.
+                const exact = BOUNDARIES.find(([tick]) => tick === bot.time.timeOfDay);
+                if (exact) this.timeBoundary(exact[1], bot.time.day);
+                return;
+            }
+            for (let day = Math.floor(previous / 24000); day <= Math.floor(time / 24000); day++) {
+                for (const [tick, event] of BOUNDARIES) {
+                    const at = day * 24000 + tick;
+                    if (at > previous && at <= time) this.timeBoundary(event, day);
+                }
+            }
+        });
         bot.on('death', () => {
             this.pendingSegmentBreak = true;
             this.emit('world.death', {}, { source: 'minecraft', origin: 'minecraft' });
@@ -150,6 +170,13 @@ export class AgentTelemetry {
     detach() {
         if (this.sampleTimer) clearInterval(this.sampleTimer);
         this.sampleTimer = null;
+    }
+
+    timeBoundary(event, day) {
+        // A frozen clock repeats the same boundary on every packet; record it once per day.
+        if (this.lastTimeBoundary?.event === event && this.lastTimeBoundary.day === day) return;
+        this.lastTimeBoundary = { event, day };
+        this.emit('world.time_boundary', { event, day }, { source: 'minecraft', origin: 'minecraft' });
     }
 
     samplePosition() {
@@ -185,14 +212,14 @@ export class AgentTelemetry {
         };
     }
 
-    decisionRequested(source, message, state = {}) {
-        const decisionId = `${this.agent.name}-decision-${++this.decisionSequence}`;
+    decisionRequested(source, message, state = {}, parentIds = []) {
+        const decisionId = `${this.idPrefix}-decision-${++this.decisionSequence}`;
         this.emit('decision.requested', {
             decision_id: decisionId,
             source,
             ...textPayload(message),
             state: { ...this.stateSnapshot(), ...state }
-        }, { source: 'mindcraft', origin: 'controller', id: `${decisionId}:requested` });
+        }, { source: 'mindcraft', origin: 'controller', id: `${decisionId}:requested`, parent_ids: parentIds });
         return decisionId;
     }
 
@@ -209,7 +236,7 @@ export class AgentTelemetry {
     }
 
     actionStarted(label, decisionId = null) {
-        const actionId = `${this.agent.name}-action-${++this.actionSequence}`;
+        const actionId = `${this.idPrefix}-action-${++this.actionSequence}`;
         // The next action has not assigned a target yet. Do not attribute the
         // previous action's goal/path to its start event.
         this.goalId = null;
@@ -224,8 +251,9 @@ export class AgentTelemetry {
     }
 
     actionCompleted(actionId, result) {
-        const kind = result?.interrupted ? 'action.interrupted' : result?.timedout ? 'action.failed' : 'action.completed';
-        const suffix = result?.interrupted ? 'interrupted' : result?.timedout ? 'failed' : 'completed';
+        const failed = result?.timedout || result?.success === false;
+        const kind = result?.interrupted ? 'action.interrupted' : failed ? 'action.failed' : 'action.completed';
+        const suffix = result?.interrupted ? 'interrupted' : failed ? 'failed' : 'completed';
         this.emit(kind, {
             success: !!result?.success,
             interrupted: !!result?.interrupted,
@@ -236,6 +264,7 @@ export class AgentTelemetry {
             source: 'action_manager', origin: 'controller', action_id: actionId,
             id: `${actionId}:${suffix}`, parent_ids: [`${actionId}:started`]
         });
+        this.lastActionEndId = `${actionId}:${suffix}`;
         if (this.activeActionId === actionId) this.activeActionId = null;
     }
 
@@ -244,11 +273,33 @@ export class AgentTelemetry {
             source: 'action_manager', origin: 'controller', action_id: actionId,
             id: `${actionId}:failed`, parent_ids: [`${actionId}:started`]
         });
+        this.lastActionEndId = `${actionId}:failed`;
         if (this.activeActionId === actionId) this.activeActionId = null;
     }
 
+    /** Id of the most recent action end, consumed by the follow-up decision. */
+    takeLastActionEnd() {
+        const id = this.lastActionEndId || null;
+        this.lastActionEndId = null;
+        return id;
+    }
+
+    codeAttempt(attempt, code, outcome, detail = null) {
+        // Generated code is model output, so it follows the text redaction switch.
+        this.emit('code.attempt', {
+            attempt,
+            outcome,
+            ...(textEnabled() ? { code, ...(detail ? { detail: String(detail) } : {}) } : { code_recorded: false })
+        }, {
+            source: 'coder', origin: 'model_report', action_id: this.activeActionId,
+            // one attempt can emit "executing" then its result; the outcome keeps both ids unique
+            id: `${this.activeActionId || this.idPrefix}-code-${attempt}:${outcome}`,
+            parent_ids: this.activeActionId ? [`${this.activeActionId}:started`] : []
+        });
+    }
+
     messageSent(recipient, message) {
-        const messageId = `${this.agent.name}-message-${++this.messageSequence}`;
+        const messageId = `${this.idPrefix}-message-${++this.messageSequence}`;
         this.emit('message.sent', { message_id: messageId, recipient, ...textPayload(message) }, {
             source: 'conversation', origin: 'controller', id: `${messageId}:sent`
         });

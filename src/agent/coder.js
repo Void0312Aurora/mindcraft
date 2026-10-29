@@ -40,15 +40,18 @@ export class Coder {
 
         let code = null;
         let no_code_failures = 0;
+        const telemetry = this.agent.telemetry;
         for (let i=0; i<MAX_ATTEMPTS; i++) {
             if (this.agent.bot.interrupt_code)
                 return null;
+            const attempt = i + 1;
             const messages_copy = JSON.parse(JSON.stringify(messages));
             let res = await this.agent.prompter.promptCoding(messages_copy);
             if (this.agent.bot.interrupt_code)
                 return null;
             let contains_code = res.indexOf('```') !== -1;
             if (!contains_code) {
+                telemetry?.codeAttempt(attempt, null, 'no_code', res);
                 if (res.indexOf('!newAction') !== -1) {
                     messages.push({
                         role: 'assistant', 
@@ -70,35 +73,51 @@ export class Coder {
                 continue;
             }
             code = res.substring(res.indexOf('```')+3, res.lastIndexOf('```'));
-            const result = await this._stageCode(code);
-            const executionModule = result.func;
-            const lintResult = await this._lintCode(result.src_lint_copy);
+            let result;
+            try {
+                result = await this._stageCode(code);
+            } catch (e) {
+                // A syntax error in generated code must reach the model as a retry, not crash the action.
+                telemetry?.codeAttempt(attempt, code, 'stage_error', e.toString());
+                messages.push({ role: 'assistant', content: res });
+                messages.push({ role: 'system', content: `Error: code could not be loaded: ${e.toString()}\nPlease try again.` });
+                continue;
+            }
+            const executionModule = result?.func;
+            const lintResult = result ? await this._lintCode(result.src_lint_copy) : null;
             if (lintResult) {
                 const message = 'Error: Code lint error:'+'\n'+lintResult+'\nPlease try again.';
                 console.warn("Linting error:"+'\n'+lintResult+'\n');
+                telemetry?.codeAttempt(attempt, code, 'lint_error', lintResult);
                 messages.push({ role: 'system', content: message });
                 continue;
             }
             if (!executionModule) {
                 console.warn("Failed to stage code, something is wrong.");
+                telemetry?.codeAttempt(attempt, code, 'stage_error', 'no execution module');
                 return 'Failed to stage code, something is wrong.';
             }
 
             try {
                 console.log('Executing code...');
+                telemetry?.codeAttempt(attempt, code, 'executing');
                 await executionModule.main(this.agent.bot);
 
                 const code_output = this.agent.actions.getBotOutputSummary();
+                telemetry?.codeAttempt(attempt, code, 'finished', code_output);
                 const summary = "Agent wrote this code: \n```" + this._sanitizeCode(code) + "```\nCode Output:\n" + code_output;
                 return summary;
             } catch (e) {
-                if (this.agent.bot.interrupt_code)
+                if (this.agent.bot.interrupt_code) {
+                    telemetry?.codeAttempt(attempt, code, 'interrupted');
                     return null;
-                
+                }
+
                 console.warn('Generated code threw error: ' + e.toString());
                 console.warn('trying again...');
 
                 const code_output = this.agent.actions.getBotOutputSummary();
+                telemetry?.codeAttempt(attempt, code, 'runtime_error', e.toString());
 
                 messages.push({
                     role: 'assistant',

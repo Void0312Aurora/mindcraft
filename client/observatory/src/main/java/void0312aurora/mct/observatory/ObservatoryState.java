@@ -124,7 +124,9 @@ final class ObservatoryState {
          trace.planned.clear();
          trace.navigation = kind.endsWith("reset") ? "replanning" : "stopped";
       } else if (kind.equals("decision.completed")) {
-         trace.command = string(payload, "command", "unrecorded");
+         // A chat-only reply (command: null) keeps the last issued command.
+         if (payload.has("command") && payload.get("command").isJsonPrimitive()) trace.command = payload.get("command").getAsString();
+         else if (!payload.has("command")) trace.command = "unrecorded";
          trace.decision = string(payload, "text", "text not recorded");
          trace.decisionSource = string(event, "source", "unknown");
       } else if (kind.equals("action.started")) {
@@ -142,7 +144,8 @@ final class ObservatoryState {
    }
 
    private static void setGoalStatus(Trace trace, JsonObject event, String status) {
-      if (trace.goal != null && currentGoal(trace, event)) {
+      // An action with no goal_id never set a target; it must not relabel an older, settled goal.
+      if (trace.goal != null && !string(event, "goal_id", "").isBlank() && currentGoal(trace, event)) {
          trace.goal.status = status;
          trace.navigation = status;
       }

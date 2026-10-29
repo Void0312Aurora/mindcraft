@@ -28,13 +28,18 @@ export class ActionManager {
         const timeout = setTimeout(() => {
             this.agent.cleanKill('Code execution refused stop after 10 seconds. Killing process.');
         }, 10000);
+        const started = Date.now();
         while (this.executing) {
-            this.agent.requestInterrupt();
+            // pathfinder.stop() only takes effect at the next path node; a bot stuck
+            // between nodes (run 08: jumping in place for 45 s) never reaches one, so
+            // the action never ends and the process is killed. After a short grace
+            // period, cancel the goal outright, which stops at once and rejects goto().
+            this.agent.requestInterrupt(Date.now() - started > 1500);
             console.log('waiting for code to finish executing...');
             await new Promise(resolve => setTimeout(resolve, 300));
         }
         clearTimeout(timeout);
-    } 
+    }
 
     cancelResume() {
         this.resume_func = null;
@@ -104,7 +109,7 @@ export class ActionManager {
             }
 
             // start the action
-            await actionFn();
+            const returned = await actionFn();
 
             // mark action as finished + cleanup
             this.executing = false;
@@ -123,8 +128,9 @@ export class ActionManager {
                 this.agent.bot.emit('idle');
             }
 
-            // return action status report
-            const result = { success: true, message: output, interrupted, timedout };
+            // return action status report; a skill that returned false failed
+            // even though it did not throw
+            const result = { success: returned !== false, message: output, interrupted, timedout };
             this.agent.telemetry?.actionCompleted(telemetryActionId, result);
             this.agent._currentDecisionId = null;
             return result;
